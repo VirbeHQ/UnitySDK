@@ -36,7 +36,9 @@ namespace Virbe.Core
         public void CreateGUI()
         {
             var root = rootVisualElement;
-            Label label = new Label("Select integration to use inside Virbe plugin");
+            Label label = new Label("Select integration to use with Virbe SDK");
+            label.style.paddingTop = 16;
+            label.style.paddingBottom = 32;
             root.Add(label);
 
             RPMToggle = new Toggle();
@@ -61,7 +63,9 @@ namespace Virbe.Core
             Daz3DToggle.value = Directory.Exists(_Daz3DFullPath) && Directory.GetFiles(_Daz3DFullPath).Length > 0;
             Daz3DToggle.name = "Daz3D";
             Daz3DToggle.label = "Daz3D";
+            Daz3DToggle.style.paddingBottom = 32;
             root.Add(Daz3DToggle);
+
 
             Button button = new Button();
             button.name = "Confirm";
