@@ -40,25 +40,25 @@ namespace Virbe.Core
             root.Add(label);
 
             RPMToggle = new Toggle();
-            RPMToggle.value = Directory.GetFiles(_RPMFullPath).Length > 0;
+            RPMToggle.value = Directory.Exists(_RPMFullPath) && Directory.GetFiles(_RPMFullPath).Length > 0;
             RPMToggle.name = "RPM";
             RPMToggle.label = "RPM";
             root.Add(RPMToggle);
 
             cc3Toggle = new Toggle();
-            cc3Toggle.value = Directory.GetFiles(_cc3FullPath).Length > 0;
+            cc3Toggle.value = Directory.Exists(_cc3FullPath) && Directory.GetFiles(_cc3FullPath).Length > 0;
             cc3Toggle.name = "CC3";
             cc3Toggle.label = "CC3";
             root.Add(cc3Toggle);
 
             FaceItToggle = new Toggle();
-            FaceItToggle.value = Directory.GetFiles(_FaceItFullPath).Length > 0;
+            FaceItToggle.value = Directory.Exists(_FaceItFullPath) && Directory.GetFiles(_FaceItFullPath).Length > 0;
             FaceItToggle.name = "Face It";
             FaceItToggle.label = "Face It";
             root.Add(FaceItToggle);
 
             Daz3DToggle = new Toggle();
-            Daz3DToggle.value = Directory.GetFiles(_Daz3DFullPath).Length > 0;
+            Daz3DToggle.value = Directory.Exists(_Daz3DFullPath) && Directory.GetFiles(_Daz3DFullPath).Length > 0;
             Daz3DToggle.name = "Daz3D";
             Daz3DToggle.label = "Daz3D";
             root.Add(Daz3DToggle);
@@ -88,10 +88,13 @@ namespace Virbe.Core
             {
                 CheckIntegration(Daz3DToggle, _Daz3DFullPath, _Daz3DFullPath);
             }
+            AssetDatabase.Refresh();
         }
 
         private void CheckIntegration(Toggle toggle, string fullPath, string zipPath)
         {
+            Directory.CreateDirectory(fullPath);
+
             var files = Directory.GetFiles(fullPath);
             if (toggle.value && files.Length == 0)
             {
