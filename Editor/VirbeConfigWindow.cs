@@ -10,7 +10,7 @@ namespace Virbe.Core
     {
         private Toggle cc3Toggle;
         private string _cc3ZipPath = "Runtime/Integrations/CC3.zip";
-        private string _cc3FolderPath = "Runtime/Integrations/CC3";
+        private string _IntegrationsPath = "Runtime/Integrations";
         private string _packagePath = "Packages/ai.virbe.plugin.unity";
 
         [MenuItem("Virbe/Integrations")]
@@ -42,7 +42,7 @@ namespace Virbe.Core
         {
             if (cc3Toggle != null)
             {
-                var folderFullPath = Path.Combine(Path.GetFullPath(_packagePath), _cc3FolderPath);
+                var folderFullPath = Path.Combine(Path.GetFullPath(_packagePath), _IntegrationsPath, "CC3");
                 if (cc3Toggle.value && !Directory.Exists(folderFullPath))
                 {
                     var zipFileName = Path.Combine(Path.GetFullPath(_packagePath), _cc3ZipPath);
