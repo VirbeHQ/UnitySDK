@@ -9,9 +9,22 @@ namespace Virbe.Core
     public class VirbeConfigWindow : EditorWindow
     {
         private Toggle cc3Toggle;
+        private Toggle RPMToggle;
+        private Toggle FaceItToggle;
+        private Toggle Daz3DToggle;
+
         private string _cc3ZipPath = "Runtime/Integrations/CC3.zip";
+        private string _RPMZipPath = "Runtime/Integrations/RPM.zip";
+        private string _Daz3DZipPath = "Runtime/Integrations/Daz3D.zip";
+        private string _FaceItZipPath = "Runtime/Integrations/FaceIt.zip";
+
         private string _IntegrationsPath = "Runtime/Integrations";
         private string _packagePath = "Packages/ai.virbe.plugin.unity";
+        private string _cc3FullPath => Path.Combine(Path.GetFullPath(_packagePath), _IntegrationsPath, "CC3");
+        private string _RPMFullPath => Path.Combine(Path.GetFullPath(_packagePath), _IntegrationsPath, "RPM");
+        private string _Daz3DFullPath => Path.Combine(Path.GetFullPath(_packagePath), _IntegrationsPath, "Daz3D");
+        private string _FaceItFullPath => Path.Combine(Path.GetFullPath(_packagePath), _IntegrationsPath, "FaceIt");
+
 
         [MenuItem("Virbe/Integrations")]
         public static void ShowIntegrations()
@@ -26,10 +39,29 @@ namespace Virbe.Core
             Label label = new Label("Select integration to use inside Virbe plugin");
             root.Add(label);
 
+            RPMToggle = new Toggle();
+            RPMToggle.value = Directory.GetFiles(_RPMFullPath).Length > 0;
+            RPMToggle.name = "RPM";
+            RPMToggle.label = "RPM";
+            root.Add(RPMToggle);
+
             cc3Toggle = new Toggle();
+            cc3Toggle.value = Directory.GetFiles(_cc3FullPath).Length > 0;
             cc3Toggle.name = "CC3";
             cc3Toggle.label = "CC3";
             root.Add(cc3Toggle);
+
+            FaceItToggle = new Toggle();
+            FaceItToggle.value = Directory.GetFiles(_FaceItFullPath).Length > 0;
+            FaceItToggle.name = "Face It";
+            FaceItToggle.label = "Face It";
+            root.Add(FaceItToggle);
+
+            Daz3DToggle = new Toggle();
+            Daz3DToggle.value = Directory.GetFiles(_Daz3DFullPath).Length > 0;
+            Daz3DToggle.name = "Daz3D";
+            Daz3DToggle.label = "Daz3D";
+            root.Add(Daz3DToggle);
 
             Button button = new Button();
             button.name = "Confirm";
@@ -42,17 +74,35 @@ namespace Virbe.Core
         {
             if (cc3Toggle != null)
             {
-                var folderFullPath = Path.Combine(Path.GetFullPath(_packagePath), _IntegrationsPath, "CC3");
-                if (cc3Toggle.value && !Directory.Exists(folderFullPath))
-                {
-                    var zipFileName = Path.Combine(Path.GetFullPath(_packagePath), _cc3ZipPath);
-                    FastZip fastZip = new FastZip();
-                    fastZip.ExtractZip(zipFileName, folderFullPath, null);
-                }
-                else if (!cc3Toggle.value && Directory.Exists(folderFullPath))
-                {
-                    File.Delete(folderFullPath);
-                }
+                CheckIntegration(cc3Toggle, _cc3FullPath, _cc3ZipPath);
+            }
+            if (RPMToggle != null)
+            {
+                CheckIntegration(RPMToggle, _RPMFullPath, _RPMZipPath);
+            }
+            if (FaceItToggle != null)
+            {
+                CheckIntegration(FaceItToggle, _FaceItFullPath, _FaceItZipPath);
+            }
+            if (Daz3DToggle != null)
+            {
+                CheckIntegration(Daz3DToggle, _Daz3DFullPath, _Daz3DFullPath);
+            }
+        }
+
+        private void CheckIntegration(Toggle toggle, string fullPath, string zipPath)
+        {
+            var files = Directory.GetFiles(fullPath);
+            if (toggle.value && files.Length == 0)
+            {
+                var zipFileName = Path.Combine(Path.GetFullPath(_packagePath), zipPath);
+                FastZip fastZip = new FastZip();
+                fastZip.ExtractZip(zipFileName, Path.Combine(Path.GetFullPath(_packagePath), _IntegrationsPath), null);
+            }
+            else if (!toggle.value && files.Length > 0)
+            {
+                Directory.Delete(fullPath, true);
+                Directory.CreateDirectory(fullPath);
             }
         }
     }
