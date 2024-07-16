@@ -1,8 +1,8 @@
 {
   "name": "ai.virbe.plugin.unity",
-  "version": "3.5.1",
+  "version": "3.5.2",
   "displayName": "Virbe Plugin",
-  "description": "Plugin for to configure and interact with Virbe Hub Virtual Beings. Works also with Virbe Open Source.",
+  "description": "SDK provide easy way to integrate virtual beings from Virbe Hub in to Unity projects.",
   "unity": "2019.2",
   "dependencies": {
     "com.unity.nuget.newtonsoft-json": "3.2.1",
