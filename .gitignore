@@ -1,0 +1,7 @@
+#Ignore all form integration
+Runtime/Integrations/*
+#except
+!Runtime/Integrations/FaceIt.zip
+!Runtime/Integrations/Daz3D.zip
+!Runtime/Integrations/RPM.zip
+!Runtime/Integrations/CC3.zip
