@@ -24,7 +24,7 @@
         {
             "displayName": "RPM samples",
             "description": "Contains simple setup using RPM avatars.",
-            "path": "Samples~/SamplesRPM"
+            "path": "Samples~/SampleRPM"
         }
    ],
   "category": "tools",
