@@ -20,6 +20,13 @@
     "chatbots",
     "conversationalAI"
   ],
+  "samples": [
+        {
+            "displayName": "RPM samples",
+            "description": "Contains simple setup using RPM avatars.",
+            "path": "Samples~/SamplesRPM"
+        }
+   ],
   "category": "tools",
   "type": "library"
 }
