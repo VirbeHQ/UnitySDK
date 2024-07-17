@@ -23,7 +23,7 @@
   "samples": [
         {
             "displayName": "RPM samples",
-            "description": "Contains simple setup using RPM avatars.",
+            "description": "Contains simple for RPM integrations.",
             "path": "Samples~/SampleRPM"
         }
    ],
