@@ -1,0 +1,32 @@
+{
+  "name": "ai.virbe.plugin.unity",
+  "version": "3.5.2",
+  "displayName": "Virbe Plugin",
+  "description": "SDK provide easy way to integrate virtual beings from Virbe Hub in to Unity projects.",
+  "unity": "2019.2",
+  "dependencies": {
+    "com.unity.nuget.newtonsoft-json": "3.2.1",
+    "com.unity.sharp-zip-lib" : "1.3.8"
+  },
+  "author": {
+    "name": "Virbe Sp. z o.o.",
+    "email": "support-unity@virbe.ai",
+    "url": "https://virbe.ai"
+  },
+  "keywords": [
+    "virtualbeings",
+    "avatars",
+    "lipsync",
+    "chatbots",
+    "conversationalAI"
+  ],
+  "samples": [
+        {
+            "displayName": "RPM samples",
+            "description": "Contains simple for RPM integrations.",
+            "path": "Samples~/SampleRPM"
+        }
+   ],
+  "category": "tools",
+  "type": "library"
+}
