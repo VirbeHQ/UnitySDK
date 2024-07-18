@@ -1,0 +1,7 @@
+#Ignore all form integration
+Runtime/Integrations/*
+#except
+!Runtime/Integrations/FaceIt.*
+!Runtime/Integrations/Daz3D.*
+!Runtime/Integrations/RPM.*
+!Runtime/Integrations/CC3.*
