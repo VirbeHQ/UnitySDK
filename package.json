@@ -1,8 +1,8 @@
 {
   "name": "ai.virbe.plugin.unity",
-  "version": "3.8.0",
+  "version": "3.6.0",
   "displayName": "Virbe Plugin",
-  "description": "SDK provide easy way to integrate virtual beings from Virbe Hub in to Unity projects.",
+  "description": "SDK provide easy way to integrate virtual beings from Virbe Hub in to Unity project.",
   "unity": "2019.2",
   "dependencies": {
     "com.unity.nuget.newtonsoft-json": "3.2.1",
@@ -23,7 +23,7 @@
   "samples": [
         {
             "displayName": "RPM samples",
-            "description": "Contains simple for RPM integrations.",
+            "description": "Contains sample for RPM integrations.",
             "path": "Samples~/SampleRPM"
         }
    ],
