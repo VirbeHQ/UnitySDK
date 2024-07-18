@@ -22,8 +22,7 @@ namespace Virbe.Core
         private Toggle FaceItToggle;
         private Toggle Daz3DToggle;
         private Label _logText;
-        private Button _rpmButton;
-        private Button _rpmSampleButton;
+        private Toggle _rpmDownloadToggle;
         private VisualElement _rpmButtonsContainer;
 
         private bool _rpmInstalled;
@@ -53,14 +52,9 @@ namespace Virbe.Core
 
         private void OnGUI()
         {
-            var showRPMDownload = _rpmInstalled && RPMToggle.value;
-            _rpmButtonsContainer.style.height = RPMToggle.value ? 24 :0 ;
-            _rpmButtonsContainer.visible = RPMToggle.value;
-            if (showRPMDownload)
+            if(RPMToggle.value && !_rpmInstalled)
             {
-                _rpmButton.text = "RPM Installed";
-                _rpmButton.clicked -= DownloadRPMPackage;
-                _rpmButton.style.color = Color.gray;
+                _rpmDownloadToggle.visible = true;
             }
         }
 
@@ -80,26 +74,12 @@ namespace Virbe.Core
             RPMToggle.label = "RPM";
             root.Add(RPMToggle);
 
-            _rpmButton = new Button();
-            _rpmButton.name = "Download RPM";
-            _rpmButton.text = "Download RPM";
-            _rpmButton.style.width = 96;
-            _rpmButton.style.height = 24;
-            _rpmButton.clicked += DownloadRPMPackage;
-
-            _rpmSampleButton = new Button();
-            _rpmSampleButton.name = "RPM Sample";
-            _rpmSampleButton.text = "RPM Sample";
-            _rpmSampleButton.style.width = 96;
-            _rpmSampleButton.style.height = 24;
-            _rpmSampleButton.clicked += () => DownloadSample(PackageName, RpmSampleName);
-
-            _rpmButtonsContainer = new VisualElement();
-            _rpmButtonsContainer.style.flexDirection = FlexDirection.Row;
-            _rpmButtonsContainer.style.height = 24;
-            _rpmButtonsContainer.Add(_rpmButton);
-            _rpmButtonsContainer.Add(_rpmSampleButton);
-            root.Add(_rpmButtonsContainer);
+            _rpmDownloadToggle = new Toggle();
+            _rpmDownloadToggle.value = false;
+            _rpmDownloadToggle.name = "Download RPM";
+            _rpmDownloadToggle.label = "Download RPM";
+            _rpmDownloadToggle.visible = false;
+            root.Add(_rpmDownloadToggle);
 
             cc3Toggle = new Toggle();
             cc3Toggle.value = Directory.Exists(_cc3FullPath) && Directory.GetFiles(_cc3FullPath).Length > 0;
@@ -144,9 +124,9 @@ namespace Virbe.Core
             {
                 return;
             }
+            _logText.text = "Downloading package...";
             _addRequest = Client.Add(url);
             EditorApplication.update += PackageDownloadProgress;
-            _logText.text = "Downloading package...";
         }
 
         private void DownloadSample(string packageName, string sampleName)
@@ -219,6 +199,12 @@ namespace Virbe.Core
         private void Confirmed()
         {
             _logText.text = "Setup in progress";
+
+            if(_rpmDownloadToggle != null && _rpmDownloadToggle.value)
+            {
+                DownloadRPMPackage();
+            }
+            _logText.text = "Prepare integration";
 
             if (cc3Toggle != null)
             {
