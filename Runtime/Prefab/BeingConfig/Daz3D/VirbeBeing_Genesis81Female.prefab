@@ -1,0 +1,180 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &2069122749936200911
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2069122749936200917}
+  - component: {fileID: 4434638453752571026}
+  - component: {fileID: 6532729922996833559}
+  - component: {fileID: 1007995518135074823}
+  - component: {fileID: 8700823722353177646}
+  m_Layer: 0
+  m_Name: VirbeBeing_Genesis81Female
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2069122749936200917
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2069122749936200911}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 0
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &4434638453752571026
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2069122749936200911}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c3871172ab6a4b549b51207e43fe1a5c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  visemesConfiguration:
+  - {fileID: 11400000, guid: 3333c411b984351438dc9fc42d815100, type: 2}
+  - {fileID: 11400000, guid: 9d8e03df1b6ff434f9102147f9c95af2, type: 2}
+  - {fileID: 11400000, guid: 0a6dfc78967011d4fb462c4648a50ebb, type: 2}
+  - {fileID: 11400000, guid: 28f12cb103ec39946bfb3e374953b0a6, type: 2}
+  - {fileID: 11400000, guid: 4844de550ba4d0f489b6aafbc98e105b, type: 2}
+  - {fileID: 11400000, guid: dc899311129c4b54eb956e3040490c8c, type: 2}
+  - {fileID: 11400000, guid: f66ddad5dc9a9c14e8a216b7be12f8e8, type: 2}
+  - {fileID: 11400000, guid: e947cf2d68f45d3409519558b15c4ddd, type: 2}
+  - {fileID: 11400000, guid: b039202963fb73b468a832927e84210f, type: 2}
+  - {fileID: 11400000, guid: 509d6baaf842e7d4ca78f272df4e13c7, type: 2}
+  - {fileID: 11400000, guid: de70e641bf818de40b51a8e58081959c, type: 2}
+  - {fileID: 11400000, guid: 0c57959e483c2d54484a6d527c0c08f4, type: 2}
+  - {fileID: 11400000, guid: 0707472168b16b447bf512763a03fb20, type: 2}
+  - {fileID: 11400000, guid: a8584b4066baa6943844b21c96b6a2ad, type: 2}
+  - {fileID: 11400000, guid: 2a253e5cd5b587e4ca9bb18cd8cbd8b9, type: 2}
+  - {fileID: 11400000, guid: b06a8f38e593f764bae36fa9b636fd0e, type: 2}
+  - {fileID: 11400000, guid: 8f324f836221d5b49832b394d232438d, type: 2}
+  visemeInAnimationCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 0.5
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  visemeOutAnimationCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0.5
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  volumeMultiplier: 0.7
+  PhonemeInTime: 0.1
+  PhonemeFadeTime: 0.2
+--- !u!114 &6532729922996833559
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2069122749936200911}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ac0f33eed42814fe98f2c2b6b6fd43d6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &1007995518135074823
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2069122749936200911}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 68ede419d4d5948b3b9ec825d070df9d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  ActionPauseSeconds: 0.3
+  PlayWithSound: 1
+  outputAudioSource: {fileID: 0}
+  _animator: {fileID: 0}
+--- !u!114 &8700823722353177646
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2069122749936200911}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 17a790305a5e4eb7bf6783bb127548bb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  beingConfigJson: {fileID: 0}
+  autoStartConversation: 1
+  createNewEndUserInFocused: 0
+  focusedStateTimeout: 60
+  inConversationStateTimeout: 30
+  listeningStateTimeout: 10
+  requestErrorStateTimeout: 1
+  onBeingStateChange:
+    m_PersistentCalls:
+      m_Calls: []
+  onBeingMuteChange:
+    m_PersistentCalls:
+      m_Calls: []
+  onUserAction:
+    m_PersistentCalls:
+      m_Calls: []
+  onBeingAction:
+    m_PersistentCalls:
+      m_Calls: []
+  onConversationError:
+    m_PersistentCalls:
+      m_Calls: []
