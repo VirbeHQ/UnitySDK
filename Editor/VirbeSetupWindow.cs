@@ -6,69 +6,9 @@ using Unity.SharpZipLib.Zip;
 using UnityEditor.PackageManager.Requests;
 using UnityEditor.PackageManager;
 using System.Collections;
-using System;
-using System.Net;
 
 namespace Virbe.Core
 {
-    public class VirbeConfigWindowL : EditorWindow
-    {
-        private TextField _configLink;
-        private Label _textLog;
-
-        [MenuItem("Tools/Virbe/Configuration")]
-        public static void ShowIntegrations()
-        {
-            var wnd = GetWindow<VirbeSetupWindow>();
-            wnd.titleContent = new GUIContent("Virbe Being Config");
-        }
-
-        public void CreateGUI()
-        {
-            var root = rootVisualElement;
-            Label label = new Label("Place here link from virbe hub:");
-            label.style.paddingTop = 16;
-            label.style.paddingBottom = 32;
-            root.Add(label);
-
-            _configLink = new TextField();
-            _configLink.style.paddingTop = 16;
-            _configLink.style.paddingBottom = 16;
-            _configLink.style.width = 250;
-            root.Add(_configLink);
-
-            _textLog = new Label();
-            _textLog.name = "Log Info";
-            _textLog.text = string.Empty;
-            _textLog.style.paddingTop = 8;
-            _textLog.style.fontSize = 12;
-            root.Add(_textLog);
-
-            Button button = new Button();
-            button.name = "Set config";
-            button.text = "Set config on scene";
-            button.style.maxWidth = 128;
-            button.style.height = 32;
-
-            root.Add(button);
-            button.clicked += Confirmed;
-        }
-
-        private void Confirmed()
-        {
-            var url = _configLink.text;
-            var result = Uri.TryCreate(url, UriKind.Absolute, out  var uriResult) && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps);
-            if (result)
-            {
-                var jsonContent = new WebClient().DownloadString(uriResult);
-                var beingConfig = Jsoncon
-            }
-            else
-            {
-                _textLog.text = "Link is invalid";
-            }
-        }
-    }
 
     public class VirbeSetupWindow : EditorWindow
     {

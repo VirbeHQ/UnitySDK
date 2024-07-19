@@ -133,6 +133,13 @@ namespace Virbe.Core
             ApiBeingConfig = config;
         }
 
+        public void InitializeFromTextAsset(TextAsset textAsset)
+        {
+            beingConfigJson = textAsset;
+            ApiBeingConfig = JsonUtility.FromJson<ApiBeingConfig>(textAsset.text);
+
+        }
+
         private void Awake()
         {
             _virbeActionPlayer = GetComponent<VirbeActionPlayer>();
