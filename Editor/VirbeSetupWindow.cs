@@ -6,6 +6,8 @@ using Unity.SharpZipLib.Zip;
 using UnityEditor.PackageManager.Requests;
 using UnityEditor.PackageManager;
 using System.Collections;
+using System.Reflection;
+using System;
 
 namespace Virbe.Core
 {
@@ -222,6 +224,7 @@ namespace Virbe.Core
             }
             AssetDatabase.Refresh();
             LogToWindow("Setup completed");
+            ClearLog();
         }
 
         private static void CheckIntegration(Toggle toggle, string fullPath, string zipPath)
@@ -246,6 +249,15 @@ namespace Virbe.Core
         {
             string defines = PlayerSettings.GetScriptingDefineSymbolsForGroup(EditorUserBuildSettings.selectedBuildTargetGroup);
             return defines.Contains("READY_PLAYER_ME");
+        }
+
+        private static void ClearLog()
+        {
+            Assembly assembly = Assembly.GetAssembly(typeof(SceneView));
+
+            Type type = assembly.GetType("UnityEditor.LogEntries");
+            MethodInfo method = type.GetMethod("Clear");
+            method.Invoke(new object(), null);
         }
     }
 }
