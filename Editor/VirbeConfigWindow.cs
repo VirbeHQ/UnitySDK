@@ -81,6 +81,7 @@ namespace Virbe.Core
                         foreach(var being in beings)
                         {
                             being.InitializeFromTextAsset(asset);
+                            EditorUtility.SetDirty(being);
                         }
                     }
                 }
