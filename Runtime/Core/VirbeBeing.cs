@@ -178,7 +178,7 @@ namespace Virbe.Core
 
         public void StartNewConversation(bool forceNewEndUser = false)
         {
-            if(ApiBeingConfig == null || ApiBeingConfig.HasRoom)
+            if(ApiBeingConfig == null || !ApiBeingConfig.HasRoom)
             {
                 Debug.LogError($"No api being config provided, can't start new coonversation");
                 return;
