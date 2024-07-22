@@ -64,7 +64,7 @@ namespace Virbe.Core
                 var jsonContent = new WebClient().DownloadString(uriResult);
                 try
                 {
-                    var beingConfig = JsonConvert.DeserializeObject<ApiBeingConfig>(jsonContent);
+                    var beingConfig = VirbeUtils.ParseConfig(jsonContent); 
                     if (!Directory.Exists(Path.GetFullPath(VirbeDirectoryPath)))
                     {
                         Directory.CreateDirectory(Path.GetFullPath(VirbeDirectoryPath));
