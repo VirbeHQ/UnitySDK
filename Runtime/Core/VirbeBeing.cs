@@ -3,6 +3,7 @@ using System.Collections;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 using Plugins.Virbe.Core.Api;
 using UnityEngine;
 using UnityEngine.Events;
@@ -72,14 +73,14 @@ namespace Virbe.Core
 
         private VirbeUserSession _currentUserSession;
 
-        protected internal ApiBeingConfig ApiBeingConfig = null;
+        protected internal IApiBeingConfig ApiBeingConfig = null;
 
         private Coroutine _autoBeingStateChangeCoroutine;
         private CancellationTokenSource pollingMessagesCancelletion;
         private Task pollingMessageTask;
         private readonly int _poolingInterval = 500;
 
-        public ApiBeingConfig ReadCurrentConfig()
+        public IApiBeingConfig ReadCurrentConfig()
         {
             if (ApiBeingConfig == null)
             {
@@ -92,7 +93,7 @@ namespace Virbe.Core
             return ApiBeingConfig;
         }
 
-        internal ApiBeingConfig VirbeApiBeing()
+        internal IApiBeingConfig VirbeApiBeing()
         {
             if (ApiBeingConfig == null)
             {
@@ -146,7 +147,7 @@ namespace Virbe.Core
 
             if (beingConfigJson != null)
             {
-                ApiBeingConfig = JsonUtility.FromJson<ApiBeingConfig>(beingConfigJson.text);
+                ApiBeingConfig = JsonConvert.DeserializeObject<ApiBeingConfig>(beingConfigJson.text);
             }
             else
             {
@@ -183,7 +184,7 @@ namespace Virbe.Core
 
         public void StartNewConversation(bool forceNewEndUser = false)
         {
-            if(ApiBeingConfig == null || ApiBeingConfig.room == null)
+            if(ApiBeingConfig == null || ApiBeingConfig.HasRoom)
             {
                 Debug.LogError($"No api being config provided, can't start new coonversation");
                 return;
@@ -195,7 +196,7 @@ namespace Virbe.Core
                 _currentUserSession = new VirbeUserSession();
             }
 
-            if (ApiBeingConfig.room.enabled)
+            if (ApiBeingConfig.RoomEnabled)
             {
                 StopRoomMessagePollingIfNeeded();
 
@@ -230,11 +231,7 @@ namespace Virbe.Core
 
         private async void StartRoomSession()
         {
-            _roomApiService = new RoomApiService(
-                ApiBeingConfig.room,
-                ApiBeingConfig.location.id,
-                _currentUserSession.EndUserId
-            );
+            _roomApiService = ApiBeingConfig.CreateRoom(_currentUserSession.EndUserId);
 
             var createRoomTask = _roomApiService.CreateRoom();
 
@@ -459,7 +456,7 @@ namespace Virbe.Core
             }
 
             // TODO send only if room session is active
-            if (ApiBeingConfig.room.enabled)
+            if (ApiBeingConfig.RoomEnabled)
             {
                 var sendTask = _roomApiService.SendSpeech(recordedAudioBytes);
                 await sendTask;
@@ -484,7 +481,7 @@ namespace Virbe.Core
             }
 
             // TODO send only if room session is active
-            if (ApiBeingConfig.room.enabled)
+            if (ApiBeingConfig.RoomEnabled)
             {
                 var sendTask = _roomApiService.SendNamedAction(name, value);
                 await sendTask;
@@ -509,7 +506,7 @@ namespace Virbe.Core
         {
             //TODO send only if room session is active
 
-            if (ApiBeingConfig.room.enabled)
+            if (ApiBeingConfig.RoomEnabled)
             {
                 var sendTask = _roomApiService.SendText(capturedUtterance);
                 await sendTask;

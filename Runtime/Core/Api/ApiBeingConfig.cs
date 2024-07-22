@@ -1,17 +1,17 @@
+using Plugins.Virbe.Core.Api;
 using System;
-using JetBrains.Annotations;
 using UnityEngine;
 
 namespace Virbe.Core
 {
     [Serializable]
-    public class ApiBeingConfig
+    public class ApiBeingConfig: IApiBeingConfig
     {
-        [SerializeField] public RoomConfig room;
-        [SerializeField] public LocationConfig location;
-        [SerializeField] public SttConfig sttConfig;
-        [SerializeField] public TtsConfig ttsConfig;
-        [SerializeField] public HostConfig host;
+        private RoomConfig room { get; set; }
+        private LocationConfig location { get; set; }
+        private SttConfig sttConfig { get; set; }
+        private TtsConfig ttsConfig { get; set; }
+        private HostConfig host { get; set; }
 
         public ApiBeingConfig()
         {
@@ -20,9 +20,21 @@ namespace Virbe.Core
             host = new HostConfig();
         }
         
-        private Uri RoomUri => new Uri(room?.roomUrl);
-        public string HostDomain => !string.IsNullOrEmpty(room?.roomUrl) ? RoomUri.GetLeftPart(UriPartial.Authority) : null;
-        public string RoomApiAccessKey => room?.roomApiAccessKey;
+        public string HostDomain => !string.IsNullOrEmpty(room?.roomUrl) ? new Uri(room?.roomUrl).GetLeftPart(UriPartial.Authority) : null;
+
+        string IApiBeingConfig.RoomApiAccessKey => room?.roomApiAccessKey;
+
+        string IApiBeingConfig.RoomUrl => room?.roomUrl;
+
+        int IApiBeingConfig.AudioChannels => ttsConfig.audioChannels;
+
+        int IApiBeingConfig.AudioFrequency => ttsConfig.audioFrequency;
+
+        int IApiBeingConfig.AudioSampleBits => ttsConfig.audioSampleBits;
+
+        bool IApiBeingConfig.RoomEnabled => room?.enabled ?? false;
+
+        bool IApiBeingConfig.HasRoom => room != null;
 
         public bool HasValidHostDomain()
         {
@@ -31,9 +43,11 @@ namespace Virbe.Core
 
         public bool HasValidApiAccessKey()
         {
-            return !string.IsNullOrEmpty(RoomApiAccessKey);
+            return !string.IsNullOrEmpty(room?.roomApiAccessKey);
         }
-        
+
+        RoomApiService IApiBeingConfig.CreateRoom(string endUserId) => new RoomApiService(room.roomUrl, room.roomApiAccessKey, location.id, endUserId);
+
         [Serializable]
         public class PresenterConfig
         {
