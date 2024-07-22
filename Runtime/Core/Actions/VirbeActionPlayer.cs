@@ -87,12 +87,12 @@ namespace Virbe.Core.Actions
 
             if (PlayWithSound && beingAction.HasAudio())
             {
-                var playedVoice = PlayVoice(beingAction.speech, _virbeBeing.ApiBeingConfig.ttsConfig);
+                var playedVoice = PlayVoice(beingAction.speech, _virbeBeing.ApiBeingConfig);
                 if (playedVoice)
                 {
                     voiceEndSignalCoroutine =
                         StartCoroutine(
-                            AfterVoicePlayed(beingAction.GetAudioLength(_virbeBeing.ApiBeingConfig.ttsConfig), beingAction));
+                            AfterVoicePlayed(beingAction.GetAudioLength(_virbeBeing.ApiBeingConfig), beingAction));
                 }
                 else
                 {
@@ -102,15 +102,15 @@ namespace Virbe.Core.Actions
             }
         }
 
-        public bool PlayVoice(byte[] audioBytes, ApiBeingConfig.TtsConfig ttsConfig)
+        public bool PlayVoice(byte[] audioBytes, IApiBeingConfig ttsConfig)
         {
             if (outputAudioSource && audioBytes.Length > 0)
             {
-                var audioClip = AudioClip.Create("clip", audioBytes.Length, ttsConfig.audioChannels,
-                    ttsConfig.audioFrequency, false, null);
+                var audioClip = AudioClip.Create("clip", audioBytes.Length, ttsConfig.AudioChannels,
+                    ttsConfig.AudioFrequency, false, null);
                 Debug.Log(
                     $"Samples: {audioClip.samples}, frequency: {audioClip.frequency}, channels: {audioClip.channels}");
-                audioClip.SetData(AudioConverter.PCMBytesToFloats(audioBytes, ttsConfig.audioSampleBits), 0);
+                audioClip.SetData(AudioConverter.PCMBytesToFloats(audioBytes, ttsConfig.AudioSampleBits), 0);
 
                 outputAudioSource.Stop();
                 outputAudioSource.clip = audioClip;
