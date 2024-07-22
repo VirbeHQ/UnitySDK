@@ -86,7 +86,7 @@ namespace Virbe.Core
             {
                 if (beingConfigJson != null)
                 {
-                    ApiBeingConfig = JsonUtility.FromJson<ApiBeingConfig>(beingConfigJson.text);
+                    ApiBeingConfig = VirbeUtils.ParseConfig(beingConfigJson.text);
                 }
             }
 
@@ -99,7 +99,7 @@ namespace Virbe.Core
             {
                 if (beingConfigJson != null)
                 {
-                    ApiBeingConfig = JsonUtility.FromJson<ApiBeingConfig>(beingConfigJson.text);
+                    ApiBeingConfig = VirbeUtils.ParseConfig(beingConfigJson.text);
                 }
                 else
                 {
@@ -125,19 +125,13 @@ namespace Virbe.Core
         public void InitializeFromConfigJson(string configJson)
         {
             beingConfigJson = new TextAsset(configJson);
-            ApiBeingConfig = JsonUtility.FromJson<ApiBeingConfig>(configJson);
-        }
-
-        public void InitializeFromConfig(ApiBeingConfig config)
-        {
-            beingConfigJson = new TextAsset(JsonUtility.ToJson(config));
-            ApiBeingConfig = config;
+            ApiBeingConfig = VirbeUtils.ParseConfig(configJson);
         }
 
         public void InitializeFromTextAsset(TextAsset textAsset)
         {
             beingConfigJson = textAsset;
-            ApiBeingConfig = JsonUtility.FromJson<ApiBeingConfig>(textAsset.text);
+            ApiBeingConfig = VirbeUtils.ParseConfig(textAsset.text);
 
         }
 
@@ -147,7 +141,7 @@ namespace Virbe.Core
 
             if (beingConfigJson != null)
             {
-                ApiBeingConfig = JsonConvert.DeserializeObject<ApiBeingConfig>(beingConfigJson.text);
+                ApiBeingConfig = VirbeUtils.ParseConfig(beingConfigJson.text);
             }
             else
             {
