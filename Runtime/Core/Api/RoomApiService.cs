@@ -20,14 +20,14 @@ namespace Plugins.Virbe.Core.Api
         private DateTime lastPollingMessageInstant;
         private string roomId;
 
-        public RoomApiService(ApiBeingConfig.RoomConfig roomConfig, string locationId, string endUserId)
+        public RoomApiService(string roomUrl, string roomApiAccessKey, string locationId, string endUserId)
         {
-            this.endpoint = roomConfig.roomUrl;
+            this.endpoint = roomUrl;
             this.locationId = locationId;
             this.endUserId = endUserId;
             this.headers = new Dictionary<string, string>
             {
-                { "X-Room-Api-Access-Key", roomConfig.roomApiAccessKey }
+                { "X-Room-Api-Access-Key", roomApiAccessKey }
             };
             this.lastPollingMessageInstant = DateTime.Now;
         }
