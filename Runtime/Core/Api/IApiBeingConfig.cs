@@ -4,6 +4,7 @@ namespace Virbe.Core
 {
     public interface IApiBeingConfig
     {
+        string BaseUrl { get; }
         string HostDomain { get; }
         string RoomApiAccessKey { get; }
         string RoomUrl { get; }
@@ -14,6 +15,10 @@ namespace Virbe.Core
         int AudioChannels { get; }
         int AudioFrequency { get; }
         int AudioSampleBits { get; }
+
+        //stt
+        SttConnectionProtocol SttProtocol { get; }
+        string SttPath { get; }
 
         bool HasValidApiAccessKey();
         bool HasValidHostDomain();
