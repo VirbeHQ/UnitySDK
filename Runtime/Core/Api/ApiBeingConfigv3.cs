@@ -1,5 +1,4 @@
-﻿using UnityEngine;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Plugins.Virbe.Core.Api;
 using Newtonsoft.Json;
@@ -7,7 +6,7 @@ using Newtonsoft.Json;
 namespace Virbe.Core
 {
     [Serializable]
-    public class ApiBeingConfigv3:IApiBeingConfig
+    public class ApiBeingConfigv3 : IApiBeingConfig
     {
         [JsonProperty("baseUrl")]
         public string BaseUrl { get; set; }
@@ -26,6 +25,7 @@ namespace Virbe.Core
         private string HostDomain => !string.IsNullOrEmpty(ConvAI?.Room?.RoomUrl) ? RoomUri.GetLeftPart(UriPartial.Authority) : null;
         private string RoomApiAccessKey => ConvAI?.Room?.RoomApiAccessKey;
 
+        string IApiBeingConfig.BaseUrl => BaseUrl;
         string IApiBeingConfig.RoomUrl => ConvAI?.Room?.RoomUrl;
 
         string IApiBeingConfig.HostDomain => HostDomain;
@@ -41,6 +41,20 @@ namespace Virbe.Core
         bool IApiBeingConfig.RoomEnabled => ConvAI?.Room?.Enabled ?? false;
 
         bool IApiBeingConfig.HasRoom => ConvAI?.Room != null;
+
+        SttConnectionProtocol IApiBeingConfig.SttProtocol => Stt.Protocol switch
+        {
+            "local" => SttConnectionProtocol.local,
+            "http" => SttConnectionProtocol.http,
+            "sse" => SttConnectionProtocol.sse,
+            "ws" => SttConnectionProtocol.ws,
+            "socket-io" => SttConnectionProtocol.socket_io,
+
+            _ => throw new ArgumentOutOfRangeException(nameof(SttConnectionProtocol), Stt.Protocol, null)
+        };
+
+
+        string IApiBeingConfig.SttPath => Stt.Path;
 
         bool IApiBeingConfig.HasValidHostDomain()
         {
@@ -133,6 +147,14 @@ namespace Virbe.Core
 
         [JsonProperty("path")]
         internal string Path { get; set; }
+    }
+
+    public enum SttConnectionProtocol {
+        local, 
+        http,
+        sse, 
+        ws, 
+        socket_io,
     }
 
     public class TTS

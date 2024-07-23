@@ -1,7 +1,6 @@
 using Newtonsoft.Json;
 using Plugins.Virbe.Core.Api;
 using System;
-using UnityEngine;
 
 namespace Virbe.Core
 {
@@ -23,6 +22,7 @@ namespace Virbe.Core
         }
 
         public string HostDomain => !string.IsNullOrEmpty(room?.roomUrl) ? new Uri(room?.roomUrl).GetLeftPart(UriPartial.Authority) : null;
+        string IApiBeingConfig.BaseUrl => HostDomain;
         string IApiBeingConfig.RoomApiAccessKey => room?.roomApiAccessKey;
         string IApiBeingConfig.RoomUrl => room?.roomUrl;
         int IApiBeingConfig.AudioChannels => ttsConfig.audioChannels;
@@ -30,6 +30,9 @@ namespace Virbe.Core
         int IApiBeingConfig.AudioSampleBits => ttsConfig.audioSampleBits;
         bool IApiBeingConfig.RoomEnabled => room?.enabled ?? false;
         bool IApiBeingConfig.HasRoom => room != null;
+        SttConnectionProtocol IApiBeingConfig.SttProtocol => SttConnectionProtocol.http;
+        string IApiBeingConfig.SttPath => string.Empty;
+
 
         public bool HasValidHostDomain()
         {
