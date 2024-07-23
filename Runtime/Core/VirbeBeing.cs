@@ -1,15 +1,17 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
+using Cysharp.Threading.Tasks;
 using Plugins.Virbe.Core.Api;
 using UnityEngine;
 using UnityEngine.Events;
 using Virbe.Core.Actions;
 using Virbe.Core.Api;
 using Virbe.Core.Logger;
+using Virbe.Core.Speech;
 
 
 namespace Virbe.Core
@@ -78,7 +80,9 @@ namespace Virbe.Core
         private Coroutine _autoBeingStateChangeCoroutine;
         private CancellationTokenSource pollingMessagesCancelletion;
         private Task pollingMessageTask;
+        private SocketIOClient.SocketIO _socketSttClient;
         private readonly int _poolingInterval = 500;
+        private List<byte> _speechBytesAwaitingSend = new List<byte>();
 
         public IApiBeingConfig ReadCurrentConfig()
         {
@@ -198,11 +202,11 @@ namespace Virbe.Core
                 {
                     if (!_currentUserSession.HasRoomId())
                     {
-                        StartRoomSession();
+                        StartRoomSession().Forget();
                     }
                     else
                     {
-                        StartRoomMessagePolling();
+                        MessagePollingTask().Forget();
                     }
                 }
                 else
@@ -223,7 +227,7 @@ namespace Virbe.Core
             StopRoomMessagePollingIfNeeded();
         }
 
-        private async void StartRoomSession()
+        private async UniTaskVoid StartRoomSession()
         {
             _roomApiService = ApiBeingConfig.CreateRoom(_currentUserSession.EndUserId);
 
@@ -247,16 +251,11 @@ namespace Virbe.Core
                 _currentUserSession.UpdateSession(_currentUserSession.EndUserId, createdRoom.id);
 
                 SendNamedAction("conversation_start");
-                StartRoomMessagePolling();
+                MessagePollingTask().Forget();
             }
         }
 
-        private async void StartRoomMessagePolling()
-        {
-            await MessagePollingTask();
-        }
-
-        private async Task MessagePollingTask()
+        private async UniTaskVoid MessagePollingTask()
         {
             pollingMessagesCancelletion = new CancellationTokenSource();
 
@@ -380,6 +379,11 @@ namespace Virbe.Core
             {
                 ChangeBeingState(Behaviour.Listening);
             }
+
+            if (ApiBeingConfig.SttProtocol == SttConnectionProtocol.socket_io)
+            {
+                ConnectToSttSocket().Forget();
+            }
         }
 
         public void UserHasStoppedSpeaking()
@@ -387,6 +391,10 @@ namespace Virbe.Core
             if (CanChangeBeingState(Behaviour.InConversation))
             {
                 ChangeBeingState(Behaviour.InConversation);
+            }
+            if (ApiBeingConfig.SttProtocol == SttConnectionProtocol.socket_io && _socketSttClient?.Connected == true)
+            {
+                DisconnectFromSttSocket().Forget();
             }
         }
 
@@ -441,11 +449,17 @@ namespace Virbe.Core
             onConversationError?.Invoke(error);
         }
 
-        public async void SendSpeechBytes(byte[] recordedAudioBytes)
+        public async UniTaskVoid SendSpeechBytes(byte[] recordedAudioBytes)
         {
             if (recordedAudioBytes == null)
             {
-                Debug.Log("Cannot send empty speech bytes");
+                Debug.Log("[VIRBE] Cannot send empty speech bytes");
+                return;
+            }
+
+            if (ApiBeingConfig.SttProtocol == SttConnectionProtocol.socket_io)
+            {
+                Debug.LogError($"[VIRBE] {SttConnectionProtocol.socket_io} protocol support only chunk audio sending at this moment.");
                 return;
             }
 
@@ -462,6 +476,43 @@ namespace Virbe.Core
                 else if (sendTask.IsCompleted)
                 {
                     Debug.Log("Sent speech: " + sendTask.Result?.id);
+                }
+            }
+        }
+
+        public async UniTask SendSpeechChunk(byte[] recordedAudioBytes)
+        {
+            if (recordedAudioBytes == null || recordedAudioBytes.Length == 0)
+            {
+                Debug.Log("[VIRBE] Audio chunk is empty - ommitting");
+                return;
+            }
+
+            if (ApiBeingConfig.SttProtocol != SttConnectionProtocol.socket_io)
+            {
+                Debug.LogError($"[VIRBE] Only {SttConnectionProtocol.socket_io} protocol support chunk audio sending at this moment.");
+                return;
+            }
+            if (ApiBeingConfig.RoomEnabled)
+            {
+                if(_socketSttClient == null)
+                {
+                    Debug.LogError($"[VIRBE] Socket not created, could not send speech chunk");
+                    return;
+                }
+                if (_socketSttClient.Connected)
+                {
+                    if(_speechBytesAwaitingSend.Count > 0)
+                    {
+                        _speechBytesAwaitingSend.AddRange(recordedAudioBytes);
+                        recordedAudioBytes = _speechBytesAwaitingSend.ToArray();
+                        _speechBytesAwaitingSend.Clear();
+                    }
+                    await _socketSttClient.EmitAsync("audio", AudioConverter.FromBytesToBase64(recordedAudioBytes));
+                }
+                else
+                {
+                    _speechBytesAwaitingSend.AddRange(recordedAudioBytes);
                 }
             }
         }
@@ -573,6 +624,62 @@ namespace Virbe.Core
             }
 
             return allowedCurrentStates.Contains(_currentState._behaviour);
+        }
+
+        private async UniTaskVoid ConnectToSttSocket()
+        {
+            _socketSttClient = new SocketIOClient.SocketIO($"{ApiBeingConfig.BaseUrl}{ApiBeingConfig.SttPath}");
+
+            _socketSttClient.On("upgrade", (response) =>
+            {
+                Debug.Log($"Upgraded transport: ${response}");
+            });
+
+            _socketSttClient.On("recognizing", (response) =>
+            {
+                //TODO: here add text aggregation
+                Debug.Log($"Recognized text: {response}");
+            });
+
+            _socketSttClient.On("connect_error", (response) =>
+            {
+                Debug.LogError($"Connection error : {response}");
+            });
+
+            _socketSttClient.OnConnected += (sender, args) =>
+            {
+                Debug.Log($"Connected to the stt socket .");
+            };
+
+            _socketSttClient.OnError += (sender, args) =>
+            {
+                Debug.Log($"Socket error: {args}");
+            };
+
+            _socketSttClient.OnDisconnected += (sender, args) =>
+            {
+                Debug.Log($"Disconnected from the stt socket {args}");
+            };
+
+            _socketSttClient.OnReconnected += (sender, args) =>
+            {
+                if (_speechBytesAwaitingSend.Count > 0)
+                {
+                    var bytesToSend = _speechBytesAwaitingSend.ToArray();
+                    _speechBytesAwaitingSend.Clear();
+                    SendSpeechChunk(bytesToSend).Forget();
+                }
+            };
+
+            await _socketSttClient.ConnectAsync();
+        }
+
+        private async UniTaskVoid DisconnectFromSttSocket()
+        {
+            var tempSocketHandle = _socketSttClient;
+            await tempSocketHandle.DisconnectAsync();
+            tempSocketHandle.Dispose();
+            tempSocketHandle = null;
         }
 
         private void ChangeBeingState(Behaviour newBehaviour)
