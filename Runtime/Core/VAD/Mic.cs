@@ -25,10 +25,6 @@ namespace Virbe.Core.VAD
         /// </summary>
         public int Frequency { get; private set; }
 
-        /// <summary>
-        /// Last populated audio sample
-        /// </summary>
-        public float[] Sample { get; private set; }
 
         /// <summary>
         /// Sample duration/length in milliseconds
@@ -55,9 +51,6 @@ namespace Virbe.Core.VAD
         public string CurrentDeviceName { get; private set; }
 
         public string PreferredDeviceName;
-
-
-        long m_SampleCount = 0;
 
 #endregion
 
@@ -218,7 +211,6 @@ namespace Virbe.Core.VAD
                 SampleDurationMS = sampleLen;
 
                 AudioClip = Microphone.Start(CurrentDeviceName, true, 10, Frequency);
-                Sample = new float[Frequency / 1000 * SampleDurationMS * AudioClip.channels];
 
                 StartCoroutine(ReadRawAudio());
 
@@ -276,21 +268,9 @@ namespace Virbe.Core.VAD
             int loops = 0;
             int readAbsPos = 0;
             int prevPos = 0;
-            float[] temp = new float[Sample.Length];
-
-            bool isSystemMicrophoneRecording;
-            try
-            {
-                isSystemMicrophoneRecording = Microphone.IsRecording(CurrentDeviceName);
-            }
-            catch (ArgumentException exception)
-            {
-                isSystemMicrophoneRecording = false;
-                // TODO mic not recording but it's not stopped restarting microphone
-                Debug.LogError($"Microphone error from coroutin ReadRawAudio: {exception.Message}");
-            }
-
-            while (AudioClip != null && isSystemMicrophoneRecording)
+            float[] temp = new float[SampleLength * AudioClip.channels];
+            var sampleCount = 0;
+            while (AudioClip != null && Microphone.IsRecording(CurrentDeviceName))
             {
                 bool isNewDataAvailable = true;
 
@@ -308,9 +288,8 @@ namespace Virbe.Core.VAD
                     {
                         AudioClip.GetData(temp, readAbsPos % AudioClip.samples);
 
-                        Sample = temp;
-                        m_SampleCount++;
-                        OnSampleReady?.Invoke(m_SampleCount, Sample);
+                        sampleCount++;
+                        OnSampleReady?.Invoke(sampleCount, temp);
 
                         readAbsPos = nextReadAbsPos;
                         isNewDataAvailable = true;
@@ -323,6 +302,24 @@ namespace Virbe.Core.VAD
             }
         }
 
-#endregion
+        //IEnumerator ReadRawAudio()
+        //{
+        //    var sampleCount = 0;
+        //    while (AudioClip != null && Microphone.IsRecording(CurrentDeviceName))
+        //    {
+        //        if (AudioClip.samples <= sampleCount)
+        //        {
+        //            continue;
+        //        }
+        //        var temp = new float[Sample.Length];
+        //        AudioClip.GetData(temp, sampleCount);
+        //        ++sampleCount;
+        //        OnSampleReady?.Invoke(sampleCount, temp);
+        //        yield return new WaitForEndOfFrame();
+        //    }
+        //}
+
+
+        #endregion
     }
 }
