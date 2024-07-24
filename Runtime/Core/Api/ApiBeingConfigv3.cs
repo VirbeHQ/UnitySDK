@@ -8,10 +8,12 @@ namespace Virbe.Core
     [Serializable]
     public class ApiBeingConfigv3 : IApiBeingConfig
     {
+        [JsonProperty("schema")]
+        public string Schema { get; set; }
         [JsonProperty("baseUrl")]
         public string BaseUrl { get; set; }
-        [JsonProperty("convAI")]
-        public AiEngine ConvAI { get; set; }
+        [JsonProperty("conversation")]
+        public AiEngine Conversation { get; set; }
         [JsonProperty("location")]
         public Location Location { get; set; }
         [JsonProperty("stt")]
@@ -21,12 +23,12 @@ namespace Virbe.Core
         [JsonProperty("configuration")]
         public Configuration Configuration { get; set; }
 
-        private Uri RoomUri => new Uri(ConvAI?.Room?.RoomUrl);
-        private string HostDomain => !string.IsNullOrEmpty(ConvAI?.Room?.RoomUrl) ? RoomUri.GetLeftPart(UriPartial.Authority) : null;
-        private string RoomApiAccessKey => ConvAI?.Room?.RoomApiAccessKey;
+        private Uri RoomUri => new Uri(Conversation?.Room?.RoomUrl);
+        private string HostDomain => !string.IsNullOrEmpty(Conversation?.Room?.RoomUrl) ? RoomUri.GetLeftPart(UriPartial.Authority) : null;
+        private string RoomApiAccessKey => Conversation?.Room?.RoomApiAccessKey;
 
         string IApiBeingConfig.BaseUrl => BaseUrl;
-        string IApiBeingConfig.RoomUrl => ConvAI?.Room?.RoomUrl;
+        string IApiBeingConfig.RoomUrl => Conversation?.Room?.RoomUrl;
 
         string IApiBeingConfig.HostDomain => HostDomain;
 
@@ -38,9 +40,9 @@ namespace Virbe.Core
 
         int IApiBeingConfig.AudioSampleBits => Tts.AudioSampleBits;
 
-        bool IApiBeingConfig.RoomEnabled => ConvAI?.Room?.Enabled ?? false;
+        bool IApiBeingConfig.RoomEnabled => Conversation?.Room?.Enabled ?? false;
 
-        bool IApiBeingConfig.HasRoom => ConvAI?.Room != null;
+        bool IApiBeingConfig.HasRoom => Conversation?.Room != null;
 
         SttConnectionProtocol IApiBeingConfig.SttProtocol => Stt.Protocol switch
         {
@@ -66,8 +68,8 @@ namespace Virbe.Core
             return !string.IsNullOrEmpty(RoomApiAccessKey);
         }
         RoomApiService IApiBeingConfig.CreateRoom(string endUserId) 
-            => new RoomApiService(ConvAI?.Room?.RoomUrl, 
-                ConvAI?.Room?.RoomApiAccessKey,
+            => new RoomApiService(Conversation?.Room?.RoomUrl, 
+                Conversation?.Room?.RoomApiAccessKey,
                 Location.Id,
                 endUserId);
     }
