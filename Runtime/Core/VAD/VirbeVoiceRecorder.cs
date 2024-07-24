@@ -280,10 +280,10 @@ namespace Virbe.Core.VAD
 
             if (!Mic.Instance.IsRecording)
             {
-                Mic.Instance.StartRecording(16000, 256);
+                Mic.Instance.StartRecording(16000, 128);
             }
 
-            StartRecordingSamples();
+            StartRecordingSamples(Time.time -0.5f);
         }
 
         public void StopVoiceCapture()
