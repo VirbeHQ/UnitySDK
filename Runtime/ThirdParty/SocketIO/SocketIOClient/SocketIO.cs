@@ -6,6 +6,7 @@ using System.Net.WebSockets;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Cysharp.Threading.Tasks;
 using SocketIO.Core;
 using SocketIO.Serializer.Core;
 using SocketIO.Serializer.NewtonsoftJson;
@@ -282,42 +283,39 @@ namespace SocketIOClient
             await Task.Delay(100).ConfigureAwait(false);
         }
 
-        private void ConnectInBackground(CancellationToken cancellationToken)
+        private async UniTask ConnectInBackground(CancellationToken cancellationToken)
         {
-            Task.Factory.StartNew(async () =>
+            InitializeStatus();
+            while (!cancellationToken.IsCancellationRequested)
             {
-                InitializeStatus();
-                while (!cancellationToken.IsCancellationRequested)
+                var options = NewTransportOptions();
+                var transport = NewTransport(Options.Transport, options);
+                if (_attempts > 0)
+                    OnReconnectAttempt.TryInvoke(this, _attempts);
+                try
                 {
-                    var options = NewTransportOptions();
-                    var transport = NewTransport(Options.Transport, options);
-                    if (_attempts > 0)
-                        OnReconnectAttempt.TryInvoke(this, _attempts);
-                    try
+                    await transport.ConnectAsync(cancellationToken).ConfigureAwait(false);
+                    Transport = transport;
+                    _transportCompletionSource.SetResult(true);
+                    break;
+                }
+                catch (Exception e)
+                {
+                    transport.Dispose();
+                    OnReconnectError.TryInvoke(this, e);
+                    var failedToAttempt = await AttemptAsync();
+                    if (failedToAttempt)
                     {
-                        await transport.ConnectAsync(cancellationToken).ConfigureAwait(false);
-                        Transport = transport;
-                        _transportCompletionSource.SetResult(true);
+                        _exitFromBackground = true;
                         break;
                     }
-                    catch (Exception e)
-                    {
-                        transport.Dispose();
-                        OnReconnectError.TryInvoke(this, e);
-                        var failedToAttempt = await AttemptAsync();
-                        if (failedToAttempt)
-                        {
-                            _exitFromBackground = true;
-                            break;
-                        }
 
-                        var canHandle = CanHandleException(e);
-                        if (canHandle) continue;
-                        _exitFromBackground = true;
-                        throw;
-                    }
+                    var canHandle = CanHandleException(e);
+                    if (canHandle) continue;
+                    _exitFromBackground = true;
+                    throw;
                 }
-            }, cancellationToken);
+            }
         }
 
         private async Task UpgradeToWebSocket(IMessage openedMessage)
