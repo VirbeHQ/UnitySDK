@@ -100,10 +100,7 @@ namespace Virbe.Core.VAD
                 if (!_voiceRecorder.isUserSpeaking())
                 {
                     Debug.Log($"Started talking");
-                    // TODO missing begin talking
-                    // int samplesOffset = Microphone.GetPosition(_microphone) - _recordingWindowBeginOffset;
-                    // samplesOffset = samplesOffset > 0 ? samplesOffset : 0;
-                    _voiceRecorder.StartRecordingSamples();
+                    _voiceRecorder.StartRecordingSamples(Time.time - 0.5f);
                 }
 
                 _currentTalkingPauseTime = 0;
