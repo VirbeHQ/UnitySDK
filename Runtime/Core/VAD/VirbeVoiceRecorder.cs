@@ -135,17 +135,17 @@ namespace Virbe.Core.VAD
                     //recording.SetData(entry.Data, 0);
 
                     var recordingBytes = SavWav.GetWavF(
-                        samples: segment,
+                        samples: entry.Data,
                         frequency: (uint)Mic.Instance.AudioClip.frequency,
                         channels: (ushort)Mic.Instance.AudioClip.channels,
                         length: out _
                     );
-                    virbeBeing.SendSpeechChunk(recordingBytes).Forget();
+                    virbeBeing.SendSpeechChunk(recordingBytes);
                 }
                 else
                 {
-                    _currentRecording.SetData(segment, _recordingSegmentOffset);
-                    _recordingSegmentOffset += segment.Length;
+                    _currentRecording.SetData(entry.Data, _recordingSegmentOffset);
+                    _recordingSegmentOffset += entry.Data.Length;
                 }
 
             }
@@ -173,9 +173,10 @@ namespace Virbe.Core.VAD
                     int clipLen = (int)(Mic.Instance.AudioClip.channels * Mic.Instance.AudioClip.frequency *
                                         maxRecordingTime); //Currently 15s
 
-                    _recordingSegmentOffset = 0;
                     _currentRecording = AudioClip.Create("clip", clipLen, Mic.Instance.AudioClip.channels,
                         Mic.Instance.AudioClip.frequency, false);
+
+                    _recordingSegmentOffset = 0;
                     _recordingStartTime = Time.time;
 
                     if (!Mathf.Approximately(startTalkingTime, 0))
@@ -279,7 +280,7 @@ namespace Virbe.Core.VAD
 
             if (!Mic.Instance.IsRecording)
             {
-                Mic.Instance.StartRecording(16000, 32);
+                Mic.Instance.StartRecording(16000, 256);
             }
 
             StartRecordingSamples();
