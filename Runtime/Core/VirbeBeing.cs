@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -82,8 +83,10 @@ namespace Virbe.Core
         private Task pollingMessageTask;
         private SocketIOClient.SocketIO _socketSttClient;
         private readonly int _poolingInterval = 500;
-        private List<byte> _speechBytesAwaitingSend = new List<byte>();
+        private bool _isSendingAudio = false;
+        private ConcurrentQueue<byte[]> _speechBytesAwaitingSend = new ConcurrentQueue<byte[]>();
         private CancellationTokenSource _sttSocketTokenSource;
+        private CancellationTokenSource _audioSocketSenderTokenSource;
 
         public IApiBeingConfig ReadCurrentConfig()
         {
@@ -256,6 +259,26 @@ namespace Virbe.Core
             }
         }
 
+        private async UniTaskVoid SocketAudioSendLoop(CancellationToken cancelationToken)
+        {
+            while (!cancelationToken.IsCancellationRequested)
+            {
+                if(_socketSttClient.Connected && _speechBytesAwaitingSend.TryDequeue(out var chunk))
+                {
+                    await _socketSttClient.EmitAsync("audio", AudioConverter.FromBytesToBase64(chunk));
+                }
+                if (cancelationToken.IsCancellationRequested)
+                {
+                    return;
+                }
+                #if UNITY_2023_1_OR_NEWER
+                    await UniTask.WaitForEndOfFrame();
+                #else
+                   await UniTask.WaitForEndOfFrame(this); // this is MonoBehaviour
+                #endif
+            }
+        }
+
         private async UniTaskVoid MessagePollingTask()
         {
             pollingMessagesCancelletion = new CancellationTokenSource();
@@ -384,6 +407,9 @@ namespace Virbe.Core
             if (ApiBeingConfig.SttProtocol == SttConnectionProtocol.socket_io)
             {
                 ConnectToSttSocket().Forget();
+                _audioSocketSenderTokenSource?.Cancel();
+                _audioSocketSenderTokenSource = new CancellationTokenSource();
+                SocketAudioSendLoop(_audioSocketSenderTokenSource.Token).Forget();
             }
         }
 
@@ -393,6 +419,7 @@ namespace Virbe.Core
             {
                 ChangeBeingState(Behaviour.InConversation);
             }
+            _audioSocketSenderTokenSource?.Cancel();
             DisposeSocketConnection();
         }
 
@@ -478,7 +505,7 @@ namespace Virbe.Core
             }
         }
 
-        public async UniTask SendSpeechChunk(byte[] recordedAudioBytes)
+        public void SendSpeechChunk(byte[] recordedAudioBytes)
         {
             if (recordedAudioBytes == null || recordedAudioBytes.Length == 0)
             {
@@ -498,20 +525,7 @@ namespace Virbe.Core
                     Debug.LogError($"[VIRBE] Socket not created, could not send speech chunk");
                     return;
                 }
-                if (_socketSttClient.Connected)
-                {
-                    if(_speechBytesAwaitingSend.Count > 0)
-                    {
-                        _speechBytesAwaitingSend.AddRange(recordedAudioBytes);
-                        recordedAudioBytes = _speechBytesAwaitingSend.ToArray();
-                        _speechBytesAwaitingSend.Clear();
-                    }
-                    await _socketSttClient.EmitAsync("audio", AudioConverter.FromBytesToBase64(recordedAudioBytes));
-                }
-                else
-                {
-                    _speechBytesAwaitingSend.AddRange(recordedAudioBytes);
-                }
+                _speechBytesAwaitingSend.Enqueue(recordedAudioBytes);
             }
         }
 
@@ -680,16 +694,6 @@ namespace Virbe.Core
             _socketSttClient.OnDisconnected += (sender, args) =>
             {
                 Debug.Log($"Disconnected from the stt socket {args}");
-            };
-
-            _socketSttClient.OnReconnected += (sender, args) =>
-            {
-                if (_speechBytesAwaitingSend.Count > 0)
-                {
-                    var bytesToSend = _speechBytesAwaitingSend.ToArray();
-                    _speechBytesAwaitingSend.Clear();
-                    SendSpeechChunk(bytesToSend).Forget();
-                }
             };
 
             await _socketSttClient.ConnectAsync(_sttSocketTokenSource.Token);
