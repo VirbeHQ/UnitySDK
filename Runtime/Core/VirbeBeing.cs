@@ -83,6 +83,7 @@ namespace Virbe.Core
         private SocketIOClient.SocketIO _socketSttClient;
         private readonly int _poolingInterval = 500;
         private List<byte> _speechBytesAwaitingSend = new List<byte>();
+        private CancellationTokenSource _sttSocketTokenSource;
 
         public IApiBeingConfig ReadCurrentConfig()
         {
@@ -392,10 +393,7 @@ namespace Virbe.Core
             {
                 ChangeBeingState(Behaviour.InConversation);
             }
-            if (ApiBeingConfig.SttProtocol == SttConnectionProtocol.socket_io && _socketSttClient?.Connected == true)
-            {
-                DisconnectFromSttSocket().Forget();
-            }
+            DisposeSocketConnection();
         }
 
         public void UserHasDisengagedFromConversation()
@@ -412,8 +410,8 @@ namespace Virbe.Core
             {
                 ChangeBeingState(Behaviour.Idle);
             }
+            DisposeSocketConnection();
         }
-
         #endregion
 
         public void MuteBeing()
@@ -626,9 +624,32 @@ namespace Virbe.Core
             return allowedCurrentStates.Contains(_currentState._behaviour);
         }
 
+        private void DisposeSocketConnection()
+        {
+            if (ApiBeingConfig.SttProtocol == SttConnectionProtocol.socket_io)
+            {
+                if (_socketSttClient?.Connected == true)
+                {
+                    DisconnectFromSttSocket().Forget();
+                }
+                else
+                {
+                    _speechBytesAwaitingSend.Clear();
+                    _sttSocketTokenSource.Cancel();
+                }
+            }
+        }
+
         private async UniTaskVoid ConnectToSttSocket()
         {
-            _socketSttClient = new SocketIOClient.SocketIO($"{ApiBeingConfig.BaseUrl}{ApiBeingConfig.SttPath}");
+            _sttSocketTokenSource?.Cancel();
+            _sttSocketTokenSource = new CancellationTokenSource();
+            _socketSttClient = new SocketIOClient.SocketIO(ApiBeingConfig.BaseUrl);
+            _socketSttClient.Options.EIO = SocketIO.Core.EngineIO.V4;
+            _socketSttClient.Options.Path = ApiBeingConfig.SttPath;
+            //_socketSttClient.Options.Transport = SocketIOClient.Transport.TransportProtocol.WebSocket;
+
+            Debug.Log($"Try connecting to socket.io endpoint");
 
             _socketSttClient.On("upgrade", (response) =>
             {
@@ -671,11 +692,12 @@ namespace Virbe.Core
                 }
             };
 
-            await _socketSttClient.ConnectAsync();
+            await _socketSttClient.ConnectAsync(_sttSocketTokenSource.Token);
         }
 
         private async UniTaskVoid DisconnectFromSttSocket()
         {
+            _sttSocketTokenSource?.Cancel();
             var tempSocketHandle = _socketSttClient;
             await tempSocketHandle.DisconnectAsync();
             tempSocketHandle.Dispose();
