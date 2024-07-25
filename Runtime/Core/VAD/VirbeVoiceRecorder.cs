@@ -340,7 +340,7 @@ namespace Virbe.Core.VAD
 
         public bool isBeingSpeaking()
         {
-            return virbeBeing != null && virbeBeing.isBeingSpeaking();
+            return virbeBeing != null && virbeBeing.IsBeingSpeaking;
         }
     }
 }
