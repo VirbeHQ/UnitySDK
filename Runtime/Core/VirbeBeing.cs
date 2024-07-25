@@ -3,12 +3,13 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
-using Plugins.Virbe.Core.Api;
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.Serialization;
 using Virbe.Core.Actions;
 using Virbe.Core.Api;
 using Virbe.Core.Logger;
@@ -17,38 +18,19 @@ using Virbe.Core.Speech;
 
 namespace Virbe.Core
 {
-    [Serializable]
-    public class BeingStateChangeEvent : UnityEvent<BeingState>
+    public class SocketHandler
     {
+
     }
-
-    [Serializable]
-    public class UserActionEvent : UnityEvent<UserAction>
-    {
-    }
-
-
-    [Serializable]
-    public class BeingActionEvent : UnityEvent<BeingAction>
-    {
-    }
-
-    [Serializable]
-    public class ConversationErrorEvent : UnityEvent<Exception>
-    {
-    }
-
     [DisallowMultipleComponent]
     [RequireComponent(typeof(VirbeActionPlayer))]
     public class VirbeBeing : MonoBehaviour
     {
-        private const string ConfigurationType = nameof(VirbeBeing);
-        private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(VirbeBeing));
+        public Action<BeingState> BeingStateChanged { get; set; }
 
         [Header("Being Configuration")]
-        [SerializeField]
         [Tooltip("E.g. \"Your API Config (check out Hub to get one or generate your Open Source)\"")]
-        protected internal TextAsset beingConfigJson;
+        [SerializeField] protected internal TextAsset beingConfigJson;
 
         [SerializeField] protected internal bool autoStartConversation = true;
         [SerializeField] protected internal bool createNewEndUserInFocused = false;
@@ -57,36 +39,69 @@ namespace Virbe.Core
         [SerializeField] private float listeningStateTimeout = 10f;
         [SerializeField] private float requestErrorStateTimeout = 1f;
 
-        [Header("Being Events")] [SerializeField]
-        public UnityEvent<BeingState> onBeingStateChange = new BeingStateChangeEvent();
+        [Header("Being Events")]
+        [SerializeField] private UnityEvent<BeingState> onBeingStateChange = new BeingStateChangeEvent();
+        [SerializeField] private UnityEvent<bool> onBeingMuteChange = new UnityEvent<bool>();
+        [SerializeField] private UserActionEvent onUserAction = new UserActionEvent();
+        [SerializeField] private BeingActionEvent onBeingAction = new BeingActionEvent();
+        [SerializeField] private ConversationErrorEvent onConversationError = new ConversationErrorEvent();
 
-        public UnityEvent<bool> onBeingMuteChange = new UnityEvent<bool>();
-        [SerializeField] public UserActionEvent onUserAction = new UserActionEvent();
-        [SerializeField] public BeingActionEvent onBeingAction = new BeingActionEvent();
+        public Behaviour CurrentBeingBehaviour => _currentState._behaviour;
+        public bool IsBeingSpeaking => _virbeActionPlayer.hasActionsToPlay();
 
-        [SerializeField] public ConversationErrorEvent onConversationError = new ConversationErrorEvent();
+        protected internal IApiBeingConfig ApiBeingConfig = null;
 
         private readonly BeingState _currentState = new BeingState();
+        private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(VirbeBeing));
 
         private string _overriddenSttLangCode = null;
         private string _overriddenTtsLanguage = null;
 
-        private RoomApiService _roomApiService;
+        private RestCommunicationHandler _restPoolingHandler;
+
         private VirbeActionPlayer _virbeActionPlayer;
-
-        private VirbeUserSession _currentUserSession;
-
-        protected internal IApiBeingConfig ApiBeingConfig = null;
-
         private Coroutine _autoBeingStateChangeCoroutine;
-        private CancellationTokenSource pollingMessagesCancelletion;
-        private Task pollingMessageTask;
+
         private SocketIOClient.SocketIO _socketSttClient;
-        private readonly int _poolingInterval = 500;
-        private bool _isSendingAudio = false;
         private ConcurrentQueue<byte[]> _speechBytesAwaitingSend = new ConcurrentQueue<byte[]>();
+        private StringBuilder _currentSttResult = new StringBuilder();
+
         private CancellationTokenSource _sttSocketTokenSource;
         private CancellationTokenSource _audioSocketSenderTokenSource;
+
+        private void Awake()
+        {
+            _virbeActionPlayer = GetComponent<VirbeActionPlayer>();
+
+            if (beingConfigJson != null)
+            {
+                ApiBeingConfig = VirbeUtils.ParseConfig(beingConfigJson.text);
+            }
+            else
+            {
+                ApiBeingConfig = new ApiBeingConfig();
+            }
+            _restPoolingHandler = new RestCommunicationHandler(ApiBeingConfig, 500);
+            _restPoolingHandler.UserActionFired += (args) => onUserAction?.Invoke(args);
+            _restPoolingHandler.BeingActionFired += (args) => _virbeActionPlayer.ScheduleNewAction(args);
+
+            onBeingStateChange.AddListener((x) => BeingStateChanged?.Invoke(x));
+        }
+
+        private void Start()
+        {
+            ChangeBeingState(Behaviour.Idle);
+
+            if (autoStartConversation)
+            {
+                StartNewConversation().Forget();
+            }
+        }
+
+        private void OnDestroy()
+        {
+            _restPoolingHandler.Dispose();
+        }
 
         public IApiBeingConfig ReadCurrentConfig()
         {
@@ -96,35 +111,6 @@ namespace Virbe.Core
                 {
                     ApiBeingConfig = VirbeUtils.ParseConfig(beingConfigJson.text);
                 }
-            }
-
-            return ApiBeingConfig;
-        }
-
-        internal IApiBeingConfig VirbeApiBeing()
-        {
-            if (ApiBeingConfig == null)
-            {
-                if (beingConfigJson != null)
-                {
-                    ApiBeingConfig = VirbeUtils.ParseConfig(beingConfigJson.text);
-                }
-                else
-                {
-                    ApiBeingConfig = new ApiBeingConfig();
-                }
-            }
-
-            if (!ApiBeingConfig.HasValidHostDomain())
-            {
-                throw new Exception(
-                    $"Host Domain defined in {ConfigurationType} is empty, but should be defined.");
-            }
-
-            if (!ApiBeingConfig.HasValidApiAccessKey())
-            {
-                throw new Exception(
-                    $"Being Room Api Access Key defined in {ConfigurationType} is empty, but should be defined.");
             }
 
             return ApiBeingConfig;
@@ -140,123 +126,42 @@ namespace Virbe.Core
         {
             beingConfigJson = textAsset;
             ApiBeingConfig = VirbeUtils.ParseConfig(textAsset.text);
-
         }
 
-        private void Awake()
+        public void StartNewConversationWithUserSession(string endUserId, string roomId)
         {
-            _virbeActionPlayer = GetComponent<VirbeActionPlayer>();
-
-            if (beingConfigJson != null)
-            {
-                ApiBeingConfig = VirbeUtils.ParseConfig(beingConfigJson.text);
-            }
-            else
-            {
-                ApiBeingConfig = new ApiBeingConfig();
-            }
+            RestoreConversation(endUserId, roomId).Forget();
         }
 
-        private void Start()
-        {
-            ChangeBeingState(Behaviour.Idle);
-
-            if (autoStartConversation)
-            {
-                StartNewConversation();
-            }
-        }
-
-        private void OnDestroy()
-        {
-            StopRoomMessagePollingIfNeeded();
-        }
-
-        public void StartNewConversationWithUserSession(string endUserId = null, string roomId = null)
-        {
-            RestoreUserSession(endUserId, roomId);
-
-            StartNewConversation();
-        }
-
-        private void RestoreUserSession(string endUserId, string conversationId)
-        {
-            _currentUserSession = new VirbeUserSession(endUserId, conversationId);
-        }
-
-        public void StartNewConversation(bool forceNewEndUser = false)
+        public async UniTask StartNewConversation(bool forceNewEndUser = false, string endUserId = null)
         {
             if(ApiBeingConfig == null || !ApiBeingConfig.HasRoom)
             {
-                Debug.LogError($"No api being config provided, can't start new coonversation");
+                _logger.LogError($"No api being config provided, can't start new coonversation");
                 return;
             }
-            if (_currentUserSession == null || forceNewEndUser)
-            {
-                StopRoomSession();
 
-                _currentUserSession = new VirbeUserSession();
+            if (!_restPoolingHandler.Initialized || forceNewEndUser)
+            {
+                _restPoolingHandler.StopPolling();
+                _virbeActionPlayer.StopCurrentAndScheduledActions();
+                await _restPoolingHandler.Prepare(endUserId);
+                SendNamedAction("conversation_start").Forget();
             }
 
-            if (ApiBeingConfig.RoomEnabled)
-            {
-                StopRoomMessagePollingIfNeeded();
-
-                if (_currentUserSession != null)
-                {
-                    if (!_currentUserSession.HasRoomId())
-                    {
-                        StartRoomSession().Forget();
-                    }
-                    else
-                    {
-                        MessagePollingTask().Forget();
-                    }
-                }
-                else
-                {
-                    Debug.LogError("No user session available to start room session");
-                }
-            }
+            _restPoolingHandler.StartPooling();
         }
 
-        public VirbeUserSession GetUserSession()
-        {
-            return _currentUserSession;
-        }
-
-        public void StopRoomSession()
+        public void StopConversation()
         {
             StopCurrentAndScheduledActions();
-            StopRoomMessagePollingIfNeeded();
+            _restPoolingHandler.StopPolling();
         }
 
-        private async UniTaskVoid StartRoomSession()
+        public async UniTask RestoreConversation(string endUserId, string roomId)
         {
-            _roomApiService = ApiBeingConfig.CreateRoom(_currentUserSession.EndUserId);
-
-            var createRoomTask = _roomApiService.CreateRoom();
-
-            await createRoomTask;
-
-            if (createRoomTask.IsFaulted)
-            {
-                // Handle any errors that occurred during room creation
-                Debug.LogError("Failed to create room: " + createRoomTask.Exception?.Message);
-
-                // TODO display UI error message that his config is wrong
-            }
-            else if (createRoomTask.IsCompleted)
-            {
-                // Get the created room from the task result
-                var createdRoom = createRoomTask.Result;
-                Debug.Log("Room created successfully. Room ID: " + createdRoom.id);
-
-                _currentUserSession.UpdateSession(_currentUserSession.EndUserId, createdRoom.id);
-
-                SendNamedAction("conversation_start");
-                MessagePollingTask().Forget();
-            }
+            await _restPoolingHandler.Prepare(endUserId, roomId);
+            _restPoolingHandler.StartPooling();
         }
 
         private async UniTaskVoid SocketAudioSendLoop(CancellationToken cancelationToken)
@@ -279,101 +184,6 @@ namespace Virbe.Core
             }
         }
 
-        private async UniTaskVoid MessagePollingTask()
-        {
-            pollingMessagesCancelletion = new CancellationTokenSource();
-
-            while (!pollingMessagesCancelletion.IsCancellationRequested)
-            {
-                await Task.Delay(_poolingInterval);
-
-                try
-                {
-                    // TODO Debug.Log might generate errors in Mobile platforms, remove it, or use a wrapper like UniTask (which is additional dependency so is it worth it?)
-                    var getMessagesTask = _roomApiService.PollNewMessages();
-                    await getMessagesTask;
-
-                    if (getMessagesTask.IsFaulted)
-                    {
-                        // Handle any errors that occurred during room creation
-                        Debug.LogError("Failed to get messages: " + getMessagesTask.Exception?.Message);
-                        continue;
-                    }
-
-                    if (!getMessagesTask.IsCompleted)
-                    {
-                        // Handle any errors that occurred during room creation
-                        Debug.LogError("Taks has been awaited but is not completed");
-                        continue;
-                    }
-
-                    // Get the messages from the task result
-                    var messages = getMessagesTask.Result;
-
-                    if (messages == null || messages.count == 0)
-                    {
-                        continue;
-                    }
-
-                    Debug.Log($"Got new messages: {messages?.count}");
-                    messages.results.Reverse();
-                    foreach (var message in messages.results)
-                    {
-                        Debug.Log("Got message: " + message?.action?.text?.text);
-                        if (message.participantType == "EndUser")
-                        {
-                            // TODO handle UserAction message on MainThread
-                            OnUserAction(new UserAction(message.action?.text?.text));
-                        }
-                        else if (message.participantType == "Api" || message.participantType == "User")
-                        {
-                            try
-                            {
-                                var getVoiceTask = _roomApiService.GetRoomMessageVoiceData(message);
-                                await getVoiceTask;
-
-                                if (getVoiceTask.IsFaulted)
-                                {
-                                    // TODO should we try to get the voice data again?
-                                    // Handle any errors that occurred during room creation
-                                    Debug.LogError("Failed to get voice data: " +
-                                                   getVoiceTask.Exception?.Message);
-                                }
-                                else if (getVoiceTask.IsCompleted)
-                                {
-                                    var action = new BeingAction
-                                    {
-                                        text = message?.action?.text.text,
-                                        speech = getVoiceTask.Result.data,
-                                        marks = getVoiceTask.Result.marks,
-                                        cards = message?.action?.uiAction?.value?.cards,
-                                        buttons = message?.action?.uiAction?.value?.buttons,
-                                    };
-                                    _virbeActionPlayer.ScheduleNewAction(action);
-                                }
-                            }
-                            catch (Exception e)
-                            {
-                                Debug.LogError("Failed to get voice data: " + e.Message);
-                            }
-                        }
-                    }
-                }
-                catch (Exception e)
-                {
-                    Debug.LogError("Failed to get messages: " + e.Message);
-                }
-            }
-        }
-
-        private void StopRoomMessagePollingIfNeeded()
-        {
-            if (pollingMessagesCancelletion != null)
-            {
-                pollingMessagesCancelletion.Cancel();
-            }
-        }
-
         #region Triggers
 
         public void UserHasApproached()
@@ -382,7 +192,7 @@ namespace Virbe.Core
             {
                 if (createNewEndUserInFocused && _currentState._behaviour == Behaviour.Idle)
                 {
-                    StartNewConversation(createNewEndUserInFocused);
+                    StartNewConversation(createNewEndUserInFocused).Forget();
                 }
 
                 ChangeBeingState(Behaviour.Focused);
@@ -441,19 +251,16 @@ namespace Virbe.Core
         }
         #endregion
 
-        public void MuteBeing()
+        public void SetBeingMute(bool isMuted)
         {
-            _currentState.isMuted = true;
-            if (_virbeActionPlayer) _virbeActionPlayer.MuteAudio(true);
+            _currentState.isMuted = isMuted;
+            if (_virbeActionPlayer)
+            {
+                _virbeActionPlayer.MuteAudio(isMuted);
+            }
             onBeingMuteChange.Invoke(_currentState.isMuted);
         }
 
-        public void UnmuteBeing()
-        {
-            _currentState.isMuted = false;
-            if (_virbeActionPlayer) _virbeActionPlayer.MuteAudio(false);
-            onBeingMuteChange.Invoke(_currentState.isMuted);
-        }
 
         public void SetOverrideDefaultSttLangCode(string sttLangCode)
         {
@@ -465,42 +272,40 @@ namespace Virbe.Core
             _overriddenTtsLanguage = ttsLanguage;
         }
 
+        //private void ConsumeApiException(Exception error)
+        //{
+        //    ChangeBeingState(Behaviour.RequestError);
 
-        private void ConsumeApiException(Exception error)
-        {
-            ChangeBeingState(Behaviour.RequestError);
-
-            _logger.LogError(error.Message);
-            onConversationError?.Invoke(error);
-        }
+        //    _logger.LogError(error.Message);
+        //    onConversationError?.Invoke(error);
+        //}
 
         public async UniTaskVoid SendSpeechBytes(byte[] recordedAudioBytes)
         {
             if (recordedAudioBytes == null)
             {
-                Debug.Log("[VIRBE] Cannot send empty speech bytes");
+                _logger.Log("[VIRBE] Cannot send empty speech bytes");
                 return;
             }
 
             if (ApiBeingConfig.SttProtocol == SttConnectionProtocol.socket_io)
             {
-                Debug.LogError($"[VIRBE] {SttConnectionProtocol.socket_io} protocol support only chunk audio sending at this moment.");
+                _logger.LogError($"[VIRBE] {SttConnectionProtocol.socket_io} protocol support only chunk audio sending at this moment.");
                 return;
             }
 
-            // TODO send only if room session is active
             if (ApiBeingConfig.RoomEnabled)
             {
-                var sendTask = _roomApiService.SendSpeech(recordedAudioBytes);
+                var sendTask = _restPoolingHandler.SendSpeech(recordedAudioBytes);
                 await sendTask;
 
                 if (sendTask.IsFaulted)
                 {
-                    Debug.Log("Failed to send speech: " + sendTask.Exception?.Message);
+                    _logger.Log("Failed to send speech: " + sendTask.Exception?.Message);
                 }
                 else if (sendTask.IsCompleted)
                 {
-                    Debug.Log("Sent speech: " + sendTask.Result?.id);
+                    _logger.Log("Sent speech");
                 }
             }
         }
@@ -509,84 +314,71 @@ namespace Virbe.Core
         {
             if (recordedAudioBytes == null || recordedAudioBytes.Length == 0)
             {
-                Debug.Log("[VIRBE] Audio chunk is empty - ommitting");
+                _logger.Log("[VIRBE] Audio chunk is empty - ommitting");
                 return;
             }
 
             if (ApiBeingConfig.SttProtocol != SttConnectionProtocol.socket_io)
             {
-                Debug.LogError($"[VIRBE] Only {SttConnectionProtocol.socket_io} protocol support chunk audio sending at this moment.");
+                _logger.LogError($"[VIRBE] Only {SttConnectionProtocol.socket_io} protocol support chunk audio sending at this moment.");
                 return;
             }
             if (ApiBeingConfig.RoomEnabled)
             {
                 if(_socketSttClient == null)
                 {
-                    Debug.LogError($"[VIRBE] Socket not created, could not send speech chunk");
+                    _logger.LogError($"[VIRBE] Socket not created, could not send speech chunk");
                     return;
                 }
                 _speechBytesAwaitingSend.Enqueue(recordedAudioBytes);
             }
         }
 
-        public async void SendNamedAction(string name, string value = null)
+        public async UniTask SendNamedAction(string name, string value = null)
         {
-            if (name == null)
+            if (string.IsNullOrEmpty(name))
             {
-                Debug.Log("Cannot send empty NamedAction");
+                _logger.Log("Cannot send empty NamedAction");
                 return;
             }
 
-            // TODO send only if room session is active
             if (ApiBeingConfig.RoomEnabled)
             {
-                var sendTask = _roomApiService.SendNamedAction(name, value);
+                var sendTask = _restPoolingHandler.SendNamedAction(name, value);
                 await sendTask;
 
                 if (sendTask.IsFaulted)
                 {
-                    Debug.Log("Failed to send namedAction: " + sendTask.Exception?.Message);
+                    _logger.Log("Failed to send namedAction: " + sendTask.Exception?.Message);
                 }
                 else if (sendTask.IsCompleted)
                 {
-                    Debug.Log("Sent namedAction: " + sendTask.Result?.id);
+                    _logger.Log("Sent namedAction");
                 }
             }
         }
 
-        public async void SubmitInput(string submitPayload, string storeKey, string storeValue)
+        public void SubmitInput(string submitPayload, string storeKey, string storeValue)
         {
             // TODO send inputs to room api
         }
 
-        public async void SendText(string capturedUtterance)
+        public async UniTask SendText(string capturedUtterance)
         {
-            //TODO send only if room session is active
-
             if (ApiBeingConfig.RoomEnabled)
             {
-                var sendTask = _roomApiService.SendText(capturedUtterance);
+                var sendTask = _restPoolingHandler.SendText(capturedUtterance);
                 await sendTask;
 
                 if (sendTask.IsFaulted)
                 {
-                    Debug.Log("Failed to send text: " + sendTask.Exception?.Message);
+                    _logger.Log("Failed to send text: " + sendTask.Exception?.Message);
                 }
                 else if (sendTask.IsCompleted)
                 {
-                    Debug.Log("Sent text: " + sendTask.Result?.id);
+                    _logger.Log("Sent text");
                 }
             }
-        }
-
-        public Behaviour getCurrentBeingBehaviour()
-        {
-            return _currentState._behaviour;
-        }
-
-        public bool isBeingSpeaking()
-        {
-            return _virbeActionPlayer.hasActionsToPlay();
         }
 
         public void StopCurrentAndScheduledActions()
@@ -661,39 +453,45 @@ namespace Virbe.Core
             _socketSttClient = new SocketIOClient.SocketIO(ApiBeingConfig.BaseUrl);
             _socketSttClient.Options.EIO = SocketIO.Core.EngineIO.V4;
             _socketSttClient.Options.Path = ApiBeingConfig.SttPath;
-            //_socketSttClient.Options.Transport = SocketIOClient.Transport.TransportProtocol.WebSocket;
+            _currentSttResult.Clear();
 
-            Debug.Log($"Try connecting to socket.io endpoint");
+            _logger.Log($"Try connecting to socket.io endpoint");
 
             _socketSttClient.On("upgrade", (response) =>
             {
-                Debug.Log($"Upgraded transport: ${response}");
+                _logger.Log($"Upgraded transport: ${response}");
             });
 
             _socketSttClient.On("recognizing", (response) =>
             {
-                //TODO: here add text aggregation
-                Debug.Log($"Recognized text: {response}");
+                _currentSttResult.Append(response);
+                _logger.Log($"Recognized text: {response}");
             });
 
             _socketSttClient.On("connect_error", (response) =>
             {
-                Debug.LogError($"Connection error : {response}");
+                _logger.LogError($"Connection error : {response}");
             });
 
             _socketSttClient.OnConnected += (sender, args) =>
             {
-                Debug.Log($"Connected to the stt socket .");
+                _logger.Log($"Connected to the stt socket .");
             };
 
             _socketSttClient.OnError += (sender, args) =>
             {
-                Debug.Log($"Socket error: {args}");
+                _logger.Log($"Socket error: {args}");
             };
 
             _socketSttClient.OnDisconnected += (sender, args) =>
             {
-                Debug.Log($"Disconnected from the stt socket {args}");
+                _sttSocketTokenSource?.Cancel();
+                if(_currentSttResult.Length > 0)
+                {
+                    SendText(_currentSttResult.ToString()).Forget();
+                    _currentSttResult.Clear();
+                }
+                _logger.Log($"Disconnected from the stt socket {args}");
             };
 
             await _socketSttClient.ConnectAsync(_sttSocketTokenSource.Token);
@@ -703,6 +501,9 @@ namespace Virbe.Core
         {
             _sttSocketTokenSource?.Cancel();
             var tempSocketHandle = _socketSttClient;
+            await Task.Delay(1000);
+            SendText(_currentSttResult.ToString()).Forget();
+            _currentSttResult.Clear();
             await tempSocketHandle.DisconnectAsync();
             tempSocketHandle.Dispose();
             tempSocketHandle = null;
@@ -760,8 +561,6 @@ namespace Virbe.Core
         {
             yield return new WaitForSeconds(timeout);
             ChangeBeingState(newBehaviour);
-
-            yield return null;
         }
 
         public void OnUserAction(UserAction userAction)
