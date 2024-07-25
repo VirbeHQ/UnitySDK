@@ -8,35 +8,10 @@ using Virbe.UI.Components.BottomBar;
 using Virbe.UI.Components.ProductCard;
 using Virbe.UI.Components.QuickReply;
 using Virbe.Core.VAD;
-using Input = Virbe.Core.Custom.Input;
+using Cysharp.Threading.Tasks;
 
 namespace Virbe.UI.Layouts
 {
-    [Serializable]
-    public class TextSubmitEvent : UnityEvent<string>
-    {
-    }
-
-    [Serializable]
-    public class ProductLearnMoreEvent : UnityEvent<Card>
-    {
-    }
-
-    [Serializable]
-    public class QuickReplyEvent : UnityEvent<Button>
-    {
-    }
-    
-    [Serializable]
-    public class SubmitInputEvent : UnityEvent<Input, string>
-    {
-    }
-    
-    [Serializable]
-    public class CancelInputEvent : UnityEvent<Input>
-    {
-    }
-
     public class VirbePluginUIConnector : MonoBehaviour, IQuickReplyListener, IProductCardListener
     {
         [SerializeField] [Tooltip("Define which being should consume this layout events")]
@@ -79,24 +54,24 @@ namespace Virbe.UI.Layouts
         public void SubmitText(string text)
         {
             _virbeBeing?.StopCurrentAndScheduledActions();
-            _virbeBeing?.SendText(text);
+            _virbeBeing?.SendText(text).Forget();
             onCustomTextSubmitEvent.Invoke(text);
         }
         
-        public void SubmitInput(Input input, string inputValue)
+        public void SubmitInput(Core.Custom.Input input, string inputValue)
         {
             _virbeBeing.SubmitInput(input.SubmitButton.Payload, input.StoreKey, inputValue);
         }
 
-        public void CancelInput(Input input)
+        public void CancelInput(Core.Custom.Input input)
         {
-            _virbeBeing.SendText(input.CancelButton.Payload);
+            _virbeBeing.SendText(input.CancelButton.Payload).Forget();
         }
         
         public void OnQuickReplyClicked(Button button)
         {
             _virbeBeing?.StopCurrentAndScheduledActions();
-            _virbeBeing?.SendText(button.Payload);
+            _virbeBeing?.SendText(button.Payload).Forget();
             onCustomQuickReplyEvent.Invoke(button);
             if (!String.IsNullOrEmpty(button.CallbackURL))
             {
@@ -117,7 +92,7 @@ namespace Virbe.UI.Layouts
         {
             if (_virbeBeing != null && bottomBarManager != null)
             {
-                bottomBarManager.SetBeingIsSpeaking(_virbeBeing.isBeingSpeaking());
+                bottomBarManager.SetBeingIsSpeaking(_virbeBeing.IsBeingSpeaking);
             }
         }
     }
