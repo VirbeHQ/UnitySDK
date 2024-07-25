@@ -1,12 +1,12 @@
 using Cysharp.Threading.Tasks;
+using System.Threading;
 using UnityEngine;
-
-// ReSharper disable UnusedMember.Global
 
 namespace Virbe.Core.Logger
 {
     internal class VirbeEngineLogger
     {
+        private static Thread _mainThread = Thread.CurrentThread;
         private static readonly ILogger Logger = Debug.unityLogger;
 
         private const string Tag = "VirbeEngine";
@@ -18,41 +18,15 @@ namespace Virbe.Core.Logger
             _prefix = prefix;
         }
 
-        internal void Log(string format, params object[] args)
+        internal void Log(string format, params object[] args) => LogOnMainThread(LogType.Log, format, args).Forget();
+        internal void LogError(string format, params object[] args) => LogOnMainThread(LogType.Error, format, args).Forget();
+        private async UniTaskVoid LogOnMainThread(LogType logType, string format, params object[] args)
         {
-            if(Logger == Debug.unityLogger)
+            if (Thread.CurrentThread != _mainThread)
             {
-                LoOnMainThread(LogType.Log, format, args).Forget();
+                await UniTask.SwitchToMainThread();
             }
-            else
-            {
-                Logger.LogFormat(LogType.Log, $"{Tag}/{_prefix}: " + format, args);
-            }
-        }
-
-        internal void LogError(string format, params object[] args)
-        {
-            if (Logger == Debug.unityLogger)
-            {
-                LoOnMainThread(LogType.Error, format, args).Forget();
-            }
-            else
-            {
-                Logger.LogFormat(LogType.Error, $"{Tag}/{_prefix}: " + format, args);
-            }
-        }
-
-        private async UniTaskVoid LoOnMainThread(LogType logType, string format, params object[] args)
-        {
-            await UniTask.SwitchToMainThread();
-            if (logType == LogType.Error)
-            {
-                LogError(format, args);
-            }
-            else
-            {
-                Log(format, args);
-            }
+            Logger.LogFormat(logType, $"{Tag}/{_prefix}: " + format, args);
         }
     }
 }
