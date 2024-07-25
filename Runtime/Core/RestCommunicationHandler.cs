@@ -34,9 +34,9 @@ namespace Virbe.Core
         internal async Task Prepare(string userId = null, string conversationId = null)
         {
             CurrentUserSession = new VirbeUserSession(userId, conversationId);
-            if(conversationId == null)
+            if(string.IsNullOrEmpty(conversationId))
             {
-                _roomApiService = _config.CreateRoom(userId);
+                _roomApiService = _config.CreateRoom(CurrentUserSession.EndUserId);
                 var createRoomTask = _roomApiService.CreateRoom();
                 await createRoomTask;
 
