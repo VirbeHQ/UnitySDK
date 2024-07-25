@@ -187,14 +187,14 @@ namespace Virbe.Core.Actions
 
         private void OnEnable()
         {
-            _virbeBeing.onBeingStateChange.AddListener(OnStateChange);
+            _virbeBeing.BeingStateChanged += OnStateChange;
         }
 
         private void OnDisable()
         {
             StopCurrentAndScheduledActions();
 
-            _virbeBeing.onBeingStateChange.RemoveListener(OnStateChange);
+            _virbeBeing.BeingStateChanged+= OnStateChange;
         }
 
         public bool hasActionsToPlay()
