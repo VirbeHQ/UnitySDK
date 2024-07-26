@@ -25,6 +25,10 @@ namespace Virbe.Core.VAD
         /// </summary>
         public int Frequency { get; private set; }
 
+        /// <summary>
+        /// number of recorded channels
+        /// </summary>
+        public int Channels { get; private set; }
 
         /// <summary>
         /// Sample duration/length in milliseconds
@@ -209,8 +213,8 @@ namespace Virbe.Core.VAD
                 Debug.Log($"Starting recording for frequency: {frequency} and sampleLen: {sampleLen}");
                 Frequency = frequency;
                 SampleDurationMS = sampleLen;
-
                 AudioClip = Microphone.Start(CurrentDeviceName, true, 10, Frequency);
+                Channels = AudioClip.channels;
 
                 StartCoroutine(ReadRawAudio());
 
