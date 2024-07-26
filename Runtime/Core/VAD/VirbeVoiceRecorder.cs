@@ -1,9 +1,7 @@
-using Cysharp.Threading.Tasks;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using UnityEngine;
-using Virbe.Core.ThirdParty.SavWav;
+using Virbe.Core.Logger;
 
 namespace Virbe.Core.VAD
 {
@@ -14,6 +12,27 @@ namespace Virbe.Core.VAD
             public float[] Data { get; set; }
             public float Time { get; set; }
         }
+        public event Action<float[]> OnChunkAudioReady;
+        public event Action<float[]> OnFullAudioReady;
+
+        public event Action OnStartSpeaking;
+        public event Action OnStopSpeaking;
+
+        public bool IsUserSpeaking => _isRecordingSamples;
+
+        [Header("Virbe Being to send to a user recorded speech")]
+        [SerializeField] private VirbeBeing _virbeBeing;
+        [SerializeField] private bool keepConstantRecording = true;
+
+        [Range(5, 15)]
+        [SerializeField] private float maxRecordingTime = 15f;
+        [SerializeField] private float keepRecordingAfterStopTime = 0.5f;
+        [SerializeField] private float minRecordingSampleTime = 0.8f;
+
+        [Header("(Optional) Where to play a user recorded speech")]
+        [SerializeField] private AudioSource userSpeechAudioSource;
+
+        private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(RestCommunicationHandler));
 
         private float _recordingStartTime;
         private float _recordingStopRequestedTime;
@@ -22,50 +41,23 @@ namespace Virbe.Core.VAD
         private bool _hasMicrophoneAvailable;
         private AudioClip _currentRecording;
         private int _samplesOffset;
-
-        [Header("Virbe Being to send to a user recorded speech")] 
-        [SerializeField] private VirbeBeing virbeBeing;
-
-        [SerializeField] private bool keepConstantRecording = true;
-        [SerializeField] [Range(5, 15)] private float maxRecordingTime = 15f;
-
-        [SerializeField] private float keepRecordingAfterStopTime = 0.5f;
-        [SerializeField] private float minRecordingSampleTime = 0.8f;
-
-        [Header("(Optional) Where to play a user recorded speech")] [SerializeField]
-        private AudioSource userSpeechAudioSource;
-
-        [SerializeField] private bool _saveWaveSamples = false;
+      
         private bool _isRecordingSamples;
         private int _recordingSegmentOffset;
         private bool _stopRecordRequested = false;
         private Queue<SampleQueueEntry> _samplesCache;
         private int _currentAddedEntries;
         private int _queueCapacity = 100;
-        private SttConnectionProtocol _connectionProtocol;
-
-        /// <summary>
-        /// List of all the available Mic devices
-        /// </summary>
-        public List<string> Devices { get; private set; }
+        private List<string> _devices;
 
         private void Awake()
         {
             _samplesCache = new Queue<SampleQueueEntry>(_queueCapacity);
 
-            UpdateDevices();
-        }
-        private void Start()
-        {
-            _connectionProtocol = virbeBeing.ApiBeingConfig.SttProtocol;
-        }
-
-        public void UpdateDevices()
-        {
-            Devices = new List<string>();
+            _devices = new List<string>();
             foreach (var device in Microphone.devices)
             {
-                Devices.Add(device);
+                _devices.Add(device);
             }
         }
 
@@ -81,21 +73,31 @@ namespace Virbe.Core.VAD
             AudioSettings.OnAudioConfigurationChanged -= OnAudioConfigurationChanged;
         }
 
+        public void Update()
+        {
+            if (_isRecordingSamples)
+            {
+                if (Time.time - _recordingStartTime > maxRecordingTime || (_stopRecordRequested &&
+                                                                           Time.time - _recordingStopRequestedTime >=
+                                                                           keepRecordingAfterStopTime))
+                {
+                    if (Mic.Instance.IsRecording && !keepConstantRecording)
+                    {
+                        Mic.Instance.StopRecording();
+                    }
+                    _logger.Log($"paused talking");
+                    StopRecordingSamplesInternal();
+                }
+            }
+        }
 
         void OnAudioConfigurationChanged(bool deviceWasChanged)
         {
-            Debug.Log(deviceWasChanged ? "Device was changed" : "Reset was called");
+            _logger.Log(deviceWasChanged ? "Device was changed" : "Reset was called");
             if (deviceWasChanged)
             {
-                // AudioConfiguration config = AudioSettings.GetConfiguration();
-                // AudioSettings.Reset(config);
-
                 Mic.UpdateDevices();
                 Mic.Instance.StopRecording();
-                // if (Mic.Instance.HasBeenRecording())
-                // {
-                // Mic.Instance.StartRecording(16000, 32);
-                // }
             }
         }
 
@@ -109,65 +111,47 @@ namespace Virbe.Core.VAD
             {
                 _samplesCache.Dequeue();
             }
-            var entry = new SampleQueueEntry() 
+
+            var entry = new SampleQueueEntry()
             {
-                Data = new float[segment.Length], 
-                Time = Time.time 
+                Data = new float[segment.Length],
+                Time = Time.time
             };
-            segment.CopyTo(entry.Data, 0);
-            _samplesCache.Enqueue(entry);
+
+            try
+            {
+                segment.CopyTo(entry.Data, 0);
+                _samplesCache.Enqueue(entry);
+            }
+            catch (ArgumentException e)
+            {
+                _logger.LogError($"Cannot read mic samples: {e.Message}");
+                return;
+            }
 
             if (!_isRecordingSamples)
             {
                 return;
             }
 
-            try
-            {
-                if(_connectionProtocol == SttConnectionProtocol.socket_io)
-                {
-                    //int clipLen = (int)(Mic.Instance.AudioClip.channels * Mic.Instance.AudioClip.frequency * (Mic.Instance.SampleDurationMS/1000f + 0.1f));
-                    //var recording = AudioClip.Create("clip", clipLen, Mic.Instance.AudioClip.channels, Mic.Instance.AudioClip.frequency, false);
-                    //recording.SetData(entry.Data, 0);
-
-                    var recordingBytes = SavWav.GetWavF(
-                        samples: entry.Data,
-                        frequency: (uint)Mic.Instance.AudioClip.frequency,
-                        channels: (ushort)Mic.Instance.AudioClip.channels,
-                        length: out _
-                    );
-                    virbeBeing.SendSpeechChunk(recordingBytes);
-                }
-                else
-                {
-                    _currentRecording.SetData(entry.Data, _recordingSegmentOffset);
-                    _recordingSegmentOffset += entry.Data.Length;
-                }
-
-            }
-            catch (System.ArgumentException e)
-            {
-                Debug.LogError($"Cannot read mic samples: {e.Message}");
-            }
-        }
-
-        public void SetBeing(VirbeBeing being)
-        {
-            virbeBeing = being;
+            _currentRecording.SetData(entry.Data, _recordingSegmentOffset);
+            _recordingSegmentOffset += entry.Data.Length;
+            OnChunkAudioReady?.Invoke(entry.Data);
+          
         }
 
         public void StartRecordingSamples(float startTalkingTime = 0)
         {
             if (!_isRecordingSamples && Mic.Instance.IsRecording)
             {
-                virbeBeing?.UserHasStartedSpeaking();
+                OnStartSpeaking?.Invoke();
                 
                 _stopRecordRequested = false;
 
                 if (Mic.Instance.AudioClip.channels != 0 && Mic.Instance.AudioClip.frequency != 0)
                 {
                     int clipLen = (int)(Mic.Instance.AudioClip.channels * Mic.Instance.AudioClip.frequency *
-                                        maxRecordingTime); //Currently 15s
+                                        maxRecordingTime);
 
                     _currentRecording = AudioClip.Create("clip", clipLen, Mic.Instance.AudioClip.channels,
                         Mic.Instance.AudioClip.frequency, false);
@@ -201,7 +185,7 @@ namespace Virbe.Core.VAD
                 else
                 {
                     // TODO something is no yes with Mic AudioClip
-                    Debug.LogError("Cannot create proper AudioClip for mic recording");
+                    _logger.LogError("Cannot create proper AudioClip for mic recording");
                 }
             }
             else if (_stopRecordRequested)
@@ -215,7 +199,7 @@ namespace Virbe.Core.VAD
             if (!_stopRecordRequested)
             {
                 // TODO if recording was shorter than X do not send it to server
-                Debug.Log($"paused talking");
+                _logger.Log($"paused talking");
                 _stopRecordRequested = true;
                 _recordingStopRequestedTime = Time.time;
             }
@@ -238,41 +222,17 @@ namespace Virbe.Core.VAD
                         samplesOffset: _samplesOffset
                     );
 
-                    var recordingBytes = SavWav.GetWavF(
-                        samples: trimmedRecording,
-                        frequency: (uint)_currentRecording.frequency,
-                        channels: (ushort)_currentRecording.channels,
-                        length: out _
-                    );
-
-                    if (_saveWaveSamples)
-                    {
-                        var path = Path.Combine(Application.dataPath,"TestRecordings");
-                        if (!Directory.Exists(path))
-                        {
-                            Directory.CreateDirectory(path);
-                        }
-                        File.WriteAllBytes($"{Application.dataPath}/TestRecordings/{DateTime.Now:HH_mm_ss}.wav",
-                            recordingBytes);
-                    }
-                    if(_connectionProtocol == SttConnectionProtocol.http)
-                    {
-                        virbeBeing.SendSpeechBytes(recordingBytes).Forget();
-                    }
+                    OnFullAudioReady?.Invoke(trimmedRecording);
                 }
-                virbeBeing?.UserHasStoppedSpeaking();
+                OnStopSpeaking?.Invoke();
+
                 Destroy(_currentRecording);
             }
         }
 
         public void StartVoiceCapture()
         {
-            Debug.Log("record");
-            if (virbeBeing == null)
-            {
-                Debug.LogError("Set virbe being before record start");
-                return;
-            }
+            _logger.Log("recording");
 
             if (!Mic.Instance.IsRecording)
             {
@@ -284,33 +244,9 @@ namespace Virbe.Core.VAD
 
         public void StopVoiceCapture()
         {
-            Debug.Log("stop record");
-            if (virbeBeing == null)
-            {
-                Debug.LogError("Set virbe being before record start");
-                return;
-            }
+            _logger.Log("stop record");
 
             StopRecordingSamples();
-        }
-
-        public void Update()
-        {
-            if (_isRecordingSamples)
-            {
-                if (Time.time - _recordingStartTime > maxRecordingTime || (_stopRecordRequested &&
-                                                                           Time.time - _recordingStopRequestedTime >=
-                                                                           keepRecordingAfterStopTime))
-                {
-                    if (Mic.Instance.IsRecording && !keepConstantRecording)
-                    {
-                        Mic.Instance.StopRecording();
-                    }
-                    Debug.Log($"paused talking");
-
-                    StopRecordingSamplesInternal();
-                }
-            }
         }
 
         private float[] TrimToTimeFrame(AudioClip audioClip, float timeFrame, int samplesOffset = 0)
@@ -327,16 +263,6 @@ namespace Virbe.Core.VAD
             audioClip.GetData(samplesData, samplesOffset);
 
             return samplesData;
-        }
-
-        public bool isUserSpeaking()
-        {
-            return _isRecordingSamples;
-        }
-
-        public bool isBeingSpeaking()
-        {
-            return virbeBeing != null && virbeBeing.IsBeingSpeaking;
         }
     }
 }
