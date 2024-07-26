@@ -7,9 +7,10 @@ namespace Virbe.Core.VAD
     [RequireComponent(typeof(VirbeVoiceRecorder))]
     public class VoiceActivationDetection: MonoBehaviour
     {
-        [Header("Disable when being is speaking")] [SerializeField]
-        private bool disableWhenBeingIsSpeaking = false;
-        
+        [SerializeField] private bool disableWhenBeingIsSpeaking = false;
+        [Tooltip("This is required only when disableWhenBeingIsSpeaking is set to TRUE")]
+        [SerializeField] private VirbeBeing _being;
+
         [SerializeField] private float _speakToBackgroundDiff = 3.3f;
         [SerializeField] private float _talkingPauseTimeToStop = .75f;
         [SerializeField] private float _talkingBeginOffsetTime = .2f; //Seconds
@@ -89,7 +90,7 @@ namespace Virbe.Core.VAD
 
         private void Update()
         {
-            if (disableWhenBeingIsSpeaking && _voiceRecorder.isBeingSpeaking())
+            if (disableWhenBeingIsSpeaking && _being.IsBeingSpeaking)
             {
                 return;
             }
@@ -97,7 +98,7 @@ namespace Virbe.Core.VAD
             var talking = VoiceDetection();
             if (talking)
             {
-                if (!_voiceRecorder.isUserSpeaking())
+                if (!_voiceRecorder.IsUserSpeaking)
                 {
                     Debug.Log($"Started talking");
                     _voiceRecorder.StartRecordingSamples(Time.time - 0.5f);
@@ -106,7 +107,7 @@ namespace Virbe.Core.VAD
                 _currentTalkingPauseTime = 0;
                 _stopCalled = false;
             }
-            else if (!talking && _voiceRecorder.isUserSpeaking())
+            else if (!talking && _voiceRecorder.IsUserSpeaking)
             {
                 if (_currentTalkingPauseTime < _talkingPauseTimeToStop)
                 {
