@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
 using Plugins.Virbe.Core.Api;
+using Virbe.Core.Actions;
 using Virbe.Core.Api;
 using Virbe.Core.Logger;
 using Virbe.Core.Speech;
@@ -12,11 +13,24 @@ using Virbe.Core.Speech;
 
 namespace Virbe.Core
 {
-    public class SocketCommunicationHandler:IDisposable
+    internal sealed class SocketCommunicationHandler: ICommunicationHandler
     {
-        internal bool Initialized { get; private set; }
-        internal VirbeUserSession CurrentUserSession { get; private set; }
+        bool ICommunicationHandler.Initialized => _initialized;
+        bool ICommunicationHandler.AudioStreamingEnabled => true;
+        event Action<UserAction> ICommunicationHandler.UserActionFired
+        {
+            add { UserActionFired += value; }
+            remove { UserActionFired -= value; }
+        }
 
+        event Action<BeingAction> ICommunicationHandler.BeingActionFired
+        {
+            add { BeingActionFired += value; }
+            remove { BeingActionFired -= value; }
+        }
+
+        private bool _initialized;
+        private VirbeUserSession CurrentUserSession;
         private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(SocketCommunicationHandler));
         private SocketIOClient.SocketIO _socketSttClient;
         private ConcurrentQueue<byte[]> _speechBytesAwaitingSend = new ConcurrentQueue<byte[]>();
@@ -26,13 +40,19 @@ namespace Virbe.Core
         private CancellationTokenSource _sttSocketTokenSource;
         private CancellationTokenSource _audioSocketSenderTokenSource;
         private IApiBeingConfig _apiBeingConfig;
+        private VirbeBeing _being;
+        private event Action<BeingAction> BeingActionFired;
+        private event Action<UserAction> UserActionFired;
 
-        public SocketCommunicationHandler(IApiBeingConfig apiBeingConfig)
+        internal SocketCommunicationHandler(VirbeBeing being)
         {
-            _apiBeingConfig = apiBeingConfig;
+            _being = being;
+            _apiBeingConfig = being.ApiBeingConfig;
+            _being.UserStartSpeaking += OpenSocket;
+            _being.UserStopSpeaking += CloseSocket;
         }
 
-        internal async Task Prepare(string userId = null, string conversationId = null)
+        async Task ICommunicationHandler.Prepare(string userId, string conversationId)
         {
             CurrentUserSession = new VirbeUserSession(userId, conversationId);
             if (string.IsNullOrEmpty(conversationId))
@@ -53,37 +73,43 @@ namespace Virbe.Core
                 }
             }
 
-            Initialized = true;
+            _initialized = true;
         }
 
-        internal async UniTaskVoid StartSending()
+        internal void OpenSocket()
         {
             ConnectToSttSocket().Forget();
             _audioSocketSenderTokenSource?.Cancel();
             _audioSocketSenderTokenSource = new CancellationTokenSource();
-            await SocketAudioSendLoop(_audioSocketSenderTokenSource.Token);
+            SocketAudioSendLoop(_audioSocketSenderTokenSource.Token).Forget();
         }
 
-        internal void StopSending()
+        internal void CloseSocket()
         {
             _audioSocketSenderTokenSource?.Cancel();
             DisposeSocketConnection();
         }
 
-        internal void EnqueueChunk(byte[] recordedAudioBytes)
+        Task ICommunicationHandler.SendSpeech(byte[] recordedAudioBytes)
         {
-            if (_apiBeingConfig.RoomEnabled)
+            if (!_apiBeingConfig.RoomEnabled)
             {
-                if (_socketSttClient == null)
-                {
-                    _logger.LogError($"[VIRBE] Socket not created, could not send speech chunk");
-                    return;
-                }
-                _speechBytesAwaitingSend.Enqueue(recordedAudioBytes);
+                return Task.CompletedTask;
             }
+            if (_socketSttClient == null)
+            {
+                _logger.LogError($"[VIRBE] Socket not created, could not send speech chunk");
+                return Task.CompletedTask;
+            }
+            _speechBytesAwaitingSend.Enqueue(recordedAudioBytes);
+            return Task.CompletedTask;
         }
 
-        private async Task SocketAudioSendLoop(CancellationToken cancelationToken)
+        Task ICommunicationHandler.SendNamedAction(string name, string value) => _roomApiService.SendNamedAction(name, value);
+
+        Task ICommunicationHandler.SendText(string text) => _roomApiService.SendText(text);
+
+        private async UniTaskVoid SocketAudioSendLoop(CancellationToken cancelationToken)
         {
             while (!cancelationToken.IsCancellationRequested)
             {
@@ -98,7 +124,6 @@ namespace Virbe.Core
                 await Task.Delay(100);
             }
         }
-
 
         private void DisposeSocketConnection()
         {
@@ -131,8 +156,9 @@ namespace Virbe.Core
 
             _socketSttClient.On("recognizing", (response) =>
             {
-                _currentSttResult.Append(response);
+                //TODO: extract string from message
                 _logger.Log($"Recognized text: {response}");
+                _currentSttResult.Append(response.ToString());
             });
 
             _socketSttClient.On("connect_error", (response) =>
@@ -181,12 +207,14 @@ namespace Virbe.Core
             tempSocketHandle = null;
         }
 
-        public void Dispose()
+        void IDisposable.Dispose()
         {
-            Initialized = false;
-            StopSending();
+            _initialized = false;
+            CloseSocket();
             CurrentUserSession = null;
             _roomApiService = null;
+            _being.UserStartSpeaking -= OpenSocket;
+            _being.UserStopSpeaking -= CloseSocket;
         }
     }
 }
