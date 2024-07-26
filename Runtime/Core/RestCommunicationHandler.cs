@@ -18,7 +18,7 @@ namespace Virbe.Core
         internal bool Initialized { get; private set; }
         internal VirbeUserSession CurrentUserSession { get; private set; }
 
-        private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(VirbeBeing));
+        private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(RestCommunicationHandler));
         private readonly int _poolingInterval;
         private readonly IApiBeingConfig _config;
 
@@ -55,14 +55,14 @@ namespace Virbe.Core
             Initialized = true;
         }
 
-        internal void StartPooling()
+        internal void StartCommunicatoin()
         {
-            StopPolling();
+            EndCommunication();
             _pollingMessagesCancelletion = new CancellationTokenSource();
             MessagePollingTask(_pollingMessagesCancelletion.Token).Forget();
         }
 
-        internal void StopPolling()
+        internal void EndCommunication()
         {
             _pollingMessagesCancelletion?.Cancel();
         }
@@ -161,7 +161,7 @@ namespace Virbe.Core
         public void Dispose()
         {
             Initialized = false;
-            StopPolling();
+            EndCommunication();
             UserActionFired = null;
             BeingActionFired = null;
             CurrentUserSession = null;
