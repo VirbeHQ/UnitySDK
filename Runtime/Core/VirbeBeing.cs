@@ -1,15 +1,15 @@
 using System;
 using System.Collections;
-using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Cysharp.Threading.Tasks;
+using Cysharp.Threading.Tasks.CompilerServices;
 using UnityEngine;
 using UnityEngine.Events;
-using UnityEngine.Serialization;
 using Virbe.Core.Actions;
-using Virbe.Core.Api;
 using Virbe.Core.Logger;
-
+using Virbe.Core.ThirdParty.SavWav;
+using Virbe.Core.VAD;
 
 namespace Virbe.Core
 {
@@ -17,7 +17,19 @@ namespace Virbe.Core
     [RequireComponent(typeof(VirbeActionPlayer))]
     public class VirbeBeing : MonoBehaviour
     {
-        public Action<BeingState> BeingStateChanged { get; set; }
+        public event Action<BeingState> BeingStateChanged;
+
+        internal event Action ConversationStarted;
+        internal event Action ConversationEnded;
+
+        internal event Action UserStartSpeaking;
+        internal event Action UserStopSpeaking;
+        internal event Action UserLeftConversation;
+
+        public Behaviour CurrentBeingBehaviour => _currentState._behaviour;
+        public bool IsBeingSpeaking => _virbeActionPlayer.hasActionsToPlay();
+        public TextAsset ActiveConfigAsset => beingConfigJson;
+        public IApiBeingConfig ApiBeingConfig { get; private set; }
 
         [Header("Being Configuration")]
         [Tooltip("E.g. \"Your API Config (check out Hub to get one or generate your Open Source)\"")]
@@ -37,23 +49,17 @@ namespace Virbe.Core
         [SerializeField] private BeingActionEvent onBeingAction = new BeingActionEvent();
         [SerializeField] private ConversationErrorEvent onConversationError = new ConversationErrorEvent();
 
-        public Behaviour CurrentBeingBehaviour => _currentState._behaviour;
-        public bool IsBeingSpeaking => _virbeActionPlayer.hasActionsToPlay();
-
-        protected internal IApiBeingConfig ApiBeingConfig = null;
-
         private readonly BeingState _currentState = new BeingState();
         private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(VirbeBeing));
 
         private string _overriddenSttLangCode = null;
         private string _overriddenTtsLanguage = null;
 
-        private RestCommunicationHandler _restPoolingHandler;
-        private SocketCommunicationHandler _socketHandler;
+        private ICommunicationHandler _activeCommunication;
 
         private VirbeActionPlayer _virbeActionPlayer;
         private Coroutine _autoBeingStateChangeCoroutine;
-
+        private bool _saveWaveSamplesDebug = false;
 
         private void Awake()
         {
@@ -67,12 +73,10 @@ namespace Virbe.Core
             {
                 ApiBeingConfig = new ApiBeingConfig();
             }
-            _restPoolingHandler = new RestCommunicationHandler(ApiBeingConfig, 500);
-            _restPoolingHandler.UserActionFired += (args) => onUserAction?.Invoke(args);
-            _restPoolingHandler.BeingActionFired += (args) => _virbeActionPlayer.ScheduleNewAction(args);
+            _activeCommunication = CommunicationHandlerFactory.CreateNewHandler(this, ApiBeingConfig);
 
-            _socketHandler = new SocketCommunicationHandler(ApiBeingConfig);
-            onBeingStateChange.AddListener((x) => BeingStateChanged?.Invoke(x));
+            _activeCommunication.UserActionFired += OnUserAction;
+            _activeCommunication.BeingActionFired += (args) => _virbeActionPlayer.ScheduleNewAction(args);
         }
 
         private void Start()
@@ -87,20 +91,7 @@ namespace Virbe.Core
 
         private void OnDestroy()
         {
-            _restPoolingHandler.Dispose();
-        }
-
-        public IApiBeingConfig ReadCurrentConfig()
-        {
-            if (ApiBeingConfig == null)
-            {
-                if (beingConfigJson != null)
-                {
-                    ApiBeingConfig = VirbeUtils.ParseConfig(beingConfigJson.text);
-                }
-            }
-
-            return ApiBeingConfig;
+            _activeCommunication.Dispose();
         }
 
         public void InitializeFromConfigJson(string configJson)
@@ -128,30 +119,21 @@ namespace Virbe.Core
                 return;
             }
 
-            if (!_restPoolingHandler.Initialized || forceNewEndUser)
+            if (!_activeCommunication.Initialized || forceNewEndUser)
             {
-                _restPoolingHandler.EndCommunication();
                 _virbeActionPlayer.StopCurrentAndScheduledActions();
-                await _restPoolingHandler.Prepare(endUserId);
+
+                await _activeCommunication.Prepare(endUserId);
                 SendNamedAction("conversation_start").Forget();
             }
-
-            _restPoolingHandler.StartCommunicatoin();
+            ConversationStarted?.Invoke();
         }
 
         public void StopConversation()
         {
             StopCurrentAndScheduledActions();
-            _restPoolingHandler.EndCommunication();
+            ConversationEnded?.Invoke();
         }
-
-        public async UniTask RestoreConversation(string endUserId, string roomId)
-        {
-            await _restPoolingHandler.Prepare(endUserId, roomId);
-            _restPoolingHandler.StartCommunicatoin();
-        }
-
-        #region Triggers
 
         public void UserHasApproached()
         {
@@ -180,10 +162,7 @@ namespace Virbe.Core
             {
                 ChangeBeingState(Behaviour.Listening);
             }
-            if (ApiBeingConfig.SttProtocol == SttConnectionProtocol.socket_io)
-            {
-                _socketHandler.StartSending().Forget();
-            }
+            UserStartSpeaking?.Invoke();
         }
 
         public void UserHasStoppedSpeaking()
@@ -192,10 +171,7 @@ namespace Virbe.Core
             {
                 ChangeBeingState(Behaviour.InConversation);
             }
-            if (ApiBeingConfig.SttProtocol == SttConnectionProtocol.socket_io)
-            {
-                _socketHandler.StopSending();
-            }
+            UserStopSpeaking?.Invoke();
         }
 
         public void UserHasDisengagedFromConversation()
@@ -212,12 +188,8 @@ namespace Virbe.Core
             {
                 ChangeBeingState(Behaviour.Idle);
             }
-            if(ApiBeingConfig.SttProtocol == SttConnectionProtocol.socket_io)
-            {
-                _socketHandler.StopSending();
-            }
+            UserLeftConversation?.Invoke();
         }
-        #endregion
 
         public void SetBeingMute(bool isMuted)
         {
@@ -229,7 +201,6 @@ namespace Virbe.Core
             onBeingMuteChange.Invoke(_currentState.isMuted);
         }
 
-
         public void SetOverrideDefaultSttLangCode(string sttLangCode)
         {
             _overriddenSttLangCode = sttLangCode;
@@ -240,51 +211,38 @@ namespace Virbe.Core
             _overriddenTtsLanguage = ttsLanguage;
         }
 
-        public async UniTaskVoid SendSpeechBytes(byte[] recordedAudioBytes)
+        public void SendSpeechBytes(float[] recordedAudio, bool streamed = true)
         {
-            if (recordedAudioBytes == null)
+            if (recordedAudio == null)
             {
                 _logger.Log("Cannot send empty speech bytes");
                 return;
             }
 
-            if (ApiBeingConfig.SttProtocol == SttConnectionProtocol.socket_io)
+            var recordingBytes = SavWav.GetWavF(
+                  samples: recordedAudio,
+                  frequency: (uint)Mic.Instance.Frequency,
+                  channels: (ushort)Mic.Instance.Channels,
+                  length: out _
+              );
+
+            if (_saveWaveSamplesDebug)
             {
-                _logger.LogError($"{SttConnectionProtocol.socket_io} protocol support only chunk audio sending at this moment.");
-                return;
+                var path = Path.Combine(Application.dataPath, "TestRecordings");
+                if (!Directory.Exists(path))
+                {
+                    Directory.CreateDirectory(path);
+                }
+                File.WriteAllBytes($"{Application.dataPath}/TestRecordings/{DateTime.Now:HH_mm_ss}.wav",
+                    recordingBytes);
             }
-
-            if (ApiBeingConfig.RoomEnabled)
+            if (_activeCommunication.AudioStreamingEnabled == streamed)
             {
-                var sendTask = _restPoolingHandler.SendSpeech(recordedAudioBytes);
-                await sendTask;
-
-                if (sendTask.IsFaulted)
-                {
-                    _logger.Log("Failed to send speech: " + sendTask.Exception?.Message);
-                }
-                else if (sendTask.IsCompleted)
-                {
-                    _logger.Log("Sent speech");
-                }
+                SendSpeechAsync(recordingBytes).Forget();
             }
         }
 
-        public void SendSpeechChunk(byte[] recordedAudioBytes)
-        {
-            if (recordedAudioBytes == null || recordedAudioBytes.Length == 0)
-            {
-                _logger.Log("[VIRBE] Audio chunk is empty - ommitting");
-                return;
-            }
-
-            if (ApiBeingConfig.SttProtocol != SttConnectionProtocol.socket_io)
-            {
-                _logger.LogError($"[VIRBE] Only {SttConnectionProtocol.socket_io} protocol support chunk audio sending at this moment.");
-                return;
-            }
-            _socketHandler.EnqueueChunk(recordedAudioBytes);
-        }
+        private async UniTaskVoid SendSpeechAsync(byte[] audio) => await _activeCommunication.SendSpeech(audio);
 
         public async UniTask SendNamedAction(string name, string value = null)
         {
@@ -296,7 +254,7 @@ namespace Virbe.Core
 
             if (ApiBeingConfig.RoomEnabled)
             {
-                var sendTask = _restPoolingHandler.SendNamedAction(name, value);
+                var sendTask = _activeCommunication.SendNamedAction(name, value);
                 await sendTask;
 
                 if (sendTask.IsFaulted)
@@ -319,7 +277,7 @@ namespace Virbe.Core
         {
             if (ApiBeingConfig.RoomEnabled)
             {
-                var sendTask = _restPoolingHandler.SendText(capturedUtterance);
+                var sendTask = _activeCommunication.SendText(capturedUtterance);
                 await sendTask;
 
                 if (sendTask.IsFaulted)
@@ -336,6 +294,12 @@ namespace Virbe.Core
         public void StopCurrentAndScheduledActions()
         {
             _virbeActionPlayer.StopCurrentAndScheduledActions();
+        }
+
+        private async UniTask RestoreConversation(string endUserId, string roomId)
+        {
+            await _activeCommunication.Prepare(endUserId, roomId);
+            ConversationStarted?.Invoke();
         }
 
         private bool CanChangeBeingState(Behaviour newBehaviour)
@@ -381,7 +345,6 @@ namespace Virbe.Core
 
             return allowedCurrentStates.Contains(_currentState._behaviour);
         }
-
       
         private void ChangeBeingState(Behaviour newBehaviour)
         {
