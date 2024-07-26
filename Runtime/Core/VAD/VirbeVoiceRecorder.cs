@@ -23,12 +23,8 @@ namespace Virbe.Core.VAD
         private AudioClip _currentRecording;
         private int _samplesOffset;
 
-        public delegate void MicRecordingError(Exception exception);
-
-        public MicRecordingError ONMicRecordingError;
-
-        [Header("Virbe Being to send to a user recorded speech")] [SerializeField]
-        private VirbeBeing virbeBeing;
+        [Header("Virbe Being to send to a user recorded speech")] 
+        [SerializeField] private VirbeBeing virbeBeing;
 
         [SerializeField] private bool keepConstantRecording = true;
         [SerializeField] [Range(5, 15)] private float maxRecordingTime = 15f;
