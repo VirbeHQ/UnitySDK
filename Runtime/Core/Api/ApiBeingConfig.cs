@@ -23,17 +23,27 @@ namespace Virbe.Core
 
         public string HostDomain => !string.IsNullOrEmpty(room?.roomUrl) ? new Uri(room?.roomUrl).GetLeftPart(UriPartial.Authority) : null;
         string IApiBeingConfig.BaseUrl => HostDomain;
-        string IApiBeingConfig.RoomApiAccessKey => room?.roomApiAccessKey;
-        string IApiBeingConfig.RoomUrl => room?.roomUrl;
         int IApiBeingConfig.AudioChannels => ttsConfig.audioChannels;
         int IApiBeingConfig.AudioFrequency => ttsConfig.audioFrequency;
         int IApiBeingConfig.AudioSampleBits => ttsConfig.audioSampleBits;
-        bool IApiBeingConfig.RoomEnabled => room?.enabled ?? false;
         bool IApiBeingConfig.HasRoom => room != null;
-        SttConnectionProtocol IApiBeingConfig.SttProtocol => SttConnectionProtocol.http;
         string IApiBeingConfig.SttPath => string.Empty;
+        SttConnectionProtocol IApiBeingConfig.SttProtocol => SttConnectionProtocol.http;
 
+        EngineType IApiBeingConfig.EngineType => EngineType.Room;
 
+        RoomData IApiBeingConfig.RoomData
+        {
+            get
+            {
+                if (_roomData == null && room != null)
+                {
+                    _roomData = new RoomData(room?.roomApiAccessKey, room?.roomUrl, room?.enabled ?? false);
+                }
+                return _roomData;
+            }
+        }
+        private RoomData _roomData;
         public bool HasValidHostDomain()
         {
             return !string.IsNullOrEmpty(HostDomain);
@@ -43,7 +53,7 @@ namespace Virbe.Core
         {
             return !string.IsNullOrEmpty(room?.roomApiAccessKey);
         }
-        RoomApiService IApiBeingConfig.CreateRoom(string endUserId) => new RoomApiService(room.roomUrl, room.roomApiAccessKey, location.id, endUserId);
+        RoomApiService IApiBeingConfig.CreateRoomObject(string endUserId) => new RoomApiService(room.roomUrl, room.roomApiAccessKey, location.id, endUserId);
 
         [Serializable]
         public class PresenterConfig
