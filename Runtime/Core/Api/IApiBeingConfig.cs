@@ -5,10 +5,8 @@ namespace Virbe.Core
     public interface IApiBeingConfig
     {
         string BaseUrl { get; }
-        string HostDomain { get; }
-        string RoomApiAccessKey { get; }
-        string RoomUrl { get; }
-        bool RoomEnabled { get; }
+        EngineType EngineType { get; }
+        RoomData RoomData { get; }
         bool HasRoom { get; }
 
         //tts
@@ -20,9 +18,6 @@ namespace Virbe.Core
         SttConnectionProtocol SttProtocol { get; }
         string SttPath { get; }
 
-        bool HasValidApiAccessKey();
-        bool HasValidHostDomain();
-
-        RoomApiService CreateRoom(string endUserId);
+        RoomApiService CreateRoomObject(string endUserId);
     }
 }
