@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using Cysharp.Threading.Tasks;
 using Cysharp.Threading.Tasks.CompilerServices;
+using Plugins.Virbe.Core.Api;
 using UnityEngine;
 using UnityEngine.Events;
 using Virbe.Core.Actions;
@@ -206,7 +207,7 @@ namespace Virbe.Core
             _overriddenTtsLanguage = ttsLanguage;
         }
 
-        public void SendSpeechBytes(float[] recordedAudio, bool streamed = true)
+        public void SendSpeechBytes(float[] recordedAudio, bool streamed)
         {
             if (recordedAudio == null)
             {
@@ -231,8 +232,7 @@ namespace Virbe.Core
                 File.WriteAllBytes($"{Application.dataPath}/TestRecordings/{DateTime.Now:HH_mm_ss}.wav",
                     recordingBytes);
             }
-            var actionType = streamed ? RequestActionType.SendAudioStream : RequestActionType.SendAudio;
-            _communicationSystem.MakeAction(actionType, recordingBytes).Forget();
+            _communicationSystem.SendAudio(recordingBytes, streamed).Forget();
         }
 
         public void SendNamedAction(string name, string value = null)
@@ -245,7 +245,7 @@ namespace Virbe.Core
 
             if (ApiBeingConfig.RoomData.Enabled)
             {
-                _communicationSystem.MakeAction(RequestActionType.SendNamedAction, name, value).Forget();
+                _communicationSystem.SendNamedAction(name, value).Forget();
             }
         }
 
@@ -258,13 +258,29 @@ namespace Virbe.Core
         {
             if (ApiBeingConfig.RoomData.Enabled)
             {
-                _communicationSystem.MakeAction(RequestActionType.SendText, capturedUtterance).Forget();
+                _communicationSystem.SendText(capturedUtterance).Forget();
             }
         }
 
         public void StopCurrentAndScheduledActions()
         {
             _virbeActionPlayer.StopCurrentAndScheduledActions();
+        }
+
+        private void ProcessAudioAction(RoomDto.RoomMessage message, RoomDto.BeingVoiceData voiceData)
+        {
+            if (voiceData != null)
+            {
+                var action = new BeingAction
+                {
+                    text = message?.action?.text?.text,
+                    speech = voiceData?.data,
+                    marks = voiceData?.marks,
+                    cards = message?.action?.uiAction?.value?.cards,
+                    buttons = message?.action?.uiAction?.value?.buttons,
+                };
+                _virbeActionPlayer.ScheduleNewAction(action);
+            }
         }
 
         private async UniTask RestoreConversation(string endUserId, string roomId)

@@ -7,4 +7,10 @@
         ws, 
         socket_io,
     }
+
+    public enum TtsConnectionProtocol
+    {
+        room,
+        http,
+    }
 }
