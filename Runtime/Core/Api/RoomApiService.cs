@@ -1,16 +1,14 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
-using Virbe.Core;
 
 namespace Plugins.Virbe.Core.Api
 {
-    public class RoomApiService
+    public sealed class RoomApiService
     {
         private readonly string endpoint;
         private readonly Dictionary<string, string> headers;
@@ -129,6 +127,12 @@ namespace Plugins.Virbe.Core.Api
         {
             return await this.Get<RoomDto.BeingVoiceData>($"/{this.roomId}/messages/{roomMessage.id}/voice-data");
         }
+
+        internal void OverrrideRoomId(string roomId)
+        {
+            this.roomId = roomId;
+        }
+
 
         private async Task<T> Request<T>(string endpoint, string method, Dictionary<string, string> headers,
             object body = null)
