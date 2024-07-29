@@ -55,7 +55,7 @@ namespace Virbe.Core
         private string _overriddenSttLangCode = null;
         private string _overriddenTtsLanguage = null;
 
-        private ICommunicationHandler _activeCommunication;
+        private CommunicationSystem _communicationSystem;
 
         private VirbeActionPlayer _virbeActionPlayer;
         private Coroutine _autoBeingStateChangeCoroutine;
@@ -73,10 +73,9 @@ namespace Virbe.Core
             {
                 ApiBeingConfig = new ApiBeingConfig();
             }
-            _activeCommunication = CommunicationHandlerFactory.CreateNewHandler(this, ApiBeingConfig);
-
-            _activeCommunication.UserActionFired += OnUserAction;
-            _activeCommunication.BeingActionFired += (args) => _virbeActionPlayer.ScheduleNewAction(args);
+            _communicationSystem = new CommunicationSystem(this);
+            _communicationSystem.UserActionFired += OnUserAction;
+            _communicationSystem.BeingActionFired += (args) => _virbeActionPlayer.ScheduleNewAction(args);
         }
 
         private void Start()
@@ -91,7 +90,7 @@ namespace Virbe.Core
 
         private void OnDestroy()
         {
-            _activeCommunication.Dispose();
+            _communicationSystem.Dispose();
         }
 
         public void InitializeFromConfigJson(string configJson)
@@ -106,10 +105,7 @@ namespace Virbe.Core
             ApiBeingConfig = VirbeUtils.ParseConfig(textAsset.text);
         }
 
-        public void StartNewConversationWithUserSession(string endUserId, string roomId)
-        {
-            RestoreConversation(endUserId, roomId).Forget();
-        }
+        public void StartNewConversationWithUserSession(string endUserId, string roomId) => RestoreConversation(endUserId, roomId).Forget();
 
         public async UniTask StartNewConversation(bool forceNewEndUser = false, string endUserId = null)
         {
@@ -119,12 +115,11 @@ namespace Virbe.Core
                 return;
             }
 
-            if (!_activeCommunication.Initialized || forceNewEndUser)
+            if (!_communicationSystem.Initialized || forceNewEndUser)
             {
                 _virbeActionPlayer.StopCurrentAndScheduledActions();
-
-                await _activeCommunication.Prepare(endUserId);
-                SendNamedAction("conversation_start").Forget();
+                await _communicationSystem.InitializeWith(endUserId);
+                SendNamedAction("conversation_start");
             }
             ConversationStarted?.Invoke();
         }
@@ -236,15 +231,11 @@ namespace Virbe.Core
                 File.WriteAllBytes($"{Application.dataPath}/TestRecordings/{DateTime.Now:HH_mm_ss}.wav",
                     recordingBytes);
             }
-            if (_activeCommunication.AudioStreamingEnabled == streamed)
-            {
-                SendSpeechAsync(recordingBytes).Forget();
-            }
+            var actionType = streamed ? RequestActionType.SendAudioStream : RequestActionType.SendAudio;
+            _communicationSystem.MakeAction(actionType, recordingBytes).Forget();
         }
 
-        private async UniTaskVoid SendSpeechAsync(byte[] audio) => await _activeCommunication.SendSpeech(audio);
-
-        public async UniTask SendNamedAction(string name, string value = null)
+        public void SendNamedAction(string name, string value = null)
         {
             if (string.IsNullOrEmpty(name))
             {
@@ -252,19 +243,9 @@ namespace Virbe.Core
                 return;
             }
 
-            if (ApiBeingConfig.RoomEnabled)
+            if (ApiBeingConfig.RoomData.Enabled)
             {
-                var sendTask = _activeCommunication.SendNamedAction(name, value);
-                await sendTask;
-
-                if (sendTask.IsFaulted)
-                {
-                    _logger.Log("Failed to send namedAction: " + sendTask.Exception?.Message);
-                }
-                else if (sendTask.IsCompleted)
-                {
-                    _logger.Log("Sent namedAction");
-                }
+                _communicationSystem.MakeAction(RequestActionType.SendNamedAction, name, value).Forget();
             }
         }
 
@@ -273,21 +254,11 @@ namespace Virbe.Core
             // TODO send inputs to room api
         }
 
-        public async UniTask SendText(string capturedUtterance)
+        public void SendText(string capturedUtterance)
         {
-            if (ApiBeingConfig.RoomEnabled)
+            if (ApiBeingConfig.RoomData.Enabled)
             {
-                var sendTask = _activeCommunication.SendText(capturedUtterance);
-                await sendTask;
-
-                if (sendTask.IsFaulted)
-                {
-                    _logger.Log("Failed to send text: " + sendTask.Exception?.Message);
-                }
-                else if (sendTask.IsCompleted)
-                {
-                    _logger.Log("Sent text");
-                }
+                _communicationSystem.MakeAction(RequestActionType.SendText, capturedUtterance).Forget();
             }
         }
 
@@ -298,7 +269,7 @@ namespace Virbe.Core
 
         private async UniTask RestoreConversation(string endUserId, string roomId)
         {
-            await _activeCommunication.Prepare(endUserId, roomId);
+            await _communicationSystem.InitializeWith(endUserId, roomId);
             ConversationStarted?.Invoke();
         }
 
