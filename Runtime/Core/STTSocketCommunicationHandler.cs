@@ -4,6 +4,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
+using Newtonsoft.Json.Linq;
 using Virbe.Core.Api;
 using Virbe.Core.Logger;
 using Virbe.Core.Speech;
@@ -42,7 +43,7 @@ namespace Virbe.Core
             return (_definedActions & type) == type;
         }
 
-         Task ICommunicationHandler.Prepare(VirbeUserSession session)
+        Task ICommunicationHandler.Prepare(VirbeUserSession session)
         {
             _currentUserSession = session;
             _initialized = true;
@@ -124,9 +125,10 @@ namespace Virbe.Core
 
             _socketSttClient.On("recognizing", (response) =>
             {
-                //TODO: extract string from message
-                _logger.Log($"Recognized text: {response}");
-                _currentSttResult.Append(response.ToString());
+                JArray jsonArray = JArray.Parse(response.ToString());
+                string result = (string)jsonArray[0]["text"];
+                _logger.Log($"[{DateTime.Now}] Recognized text: {result}");
+                _currentSttResult.Append(result);
             });
 
             _socketSttClient.On("connect_error", (response) =>
@@ -158,7 +160,9 @@ namespace Virbe.Core
         {
             if (_currentSttResult.Length > 0)
             {
-                RequestTextSend?.Invoke(_currentSttResult.ToString());
+                var result = _currentSttResult.ToString();
+                _logger.Log($"[{DateTime.Now}] Request send recognized text: {result}");
+                RequestTextSend?.Invoke(result);
                 _currentSttResult.Clear();
             }
         }
@@ -167,7 +171,7 @@ namespace Virbe.Core
         {
             _sttSocketTokenSource?.Cancel();
             var tempSocketHandle = _socketSttClient;
-            await Task.Delay(1000);
+            await Task.Delay(2500);
             SendTextFromRresult();
             await tempSocketHandle.DisconnectAsync();
             tempSocketHandle.Dispose();
@@ -186,7 +190,11 @@ namespace Virbe.Core
 
         Task ICommunicationHandler.MakeAction(RequestActionType type, params object[] args)
         {
-            throw new NotImplementedException();
+            if(type == RequestActionType.SendAudioStream)
+            {
+                SendSpeech(args[0] as byte[]);
+            }
+            return Task.CompletedTask;
         }
     }
 }
