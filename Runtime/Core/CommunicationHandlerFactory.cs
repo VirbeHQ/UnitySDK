@@ -1,4 +1,5 @@
 ﻿using Cysharp.Threading.Tasks;
+using Plugins.Virbe.Core.Api;
 using System;
 using System.Collections.Generic;
 using Virbe.Core.Actions;
@@ -33,12 +34,25 @@ namespace Virbe.Core
             if (_apiBeingConfig.HasRoom && _apiBeingConfig.EngineType == EngineType.Room)
             {
                 var roomHandler = new RoomCommunicationHandler(_being, _callActionToken, 500);
+                roomHandler.RequestTTSProcessing += (text, callback) => ProcessTTS( text, callback).Forget();
+                //in case of stt protocol different than http do not send audio from room handler
+                var defindedActions = RequestActionType.SendText | RequestActionType.SendNamedAction;
+                if(_apiBeingConfig.TtsConnectionProtocol == TtsConnectionProtocol.http)
+                {
+                    defindedActions |= RequestActionType.ProcessTTS;
+                }
+                if (_apiBeingConfig.SttProtocol == SttConnectionProtocol.http)
+                {
+                    defindedActions |= RequestActionType.SendAudio;
+                }
+                roomHandler.OverrideDefinedActions(defindedActions);
                 _handlers.Add(roomHandler);
             }
             if (_apiBeingConfig.SttProtocol == SttConnectionProtocol.socket_io)
             {
                 var socketHandler = new STTSocketCommunicationHandler(being);
-                socketHandler.RequestTextSend += (text) => MakeAction(RequestActionType.SendText, text).Forget(); 
+                socketHandler.RequestTextSend += (text) => SendText( text).Forget(); 
+               
                 _handlers.Add(socketHandler);
             }
         }
@@ -48,18 +62,59 @@ namespace Virbe.Core
             _session = new VirbeUserSession(endUserId, conversationId);
             foreach (var handler in _handlers)
             {
-                await handler.Prepare(_session);
+                try
+                {
+                    await handler.Prepare(_session);
+                }
+                catch (Exception _)
+                {
+                    _logger.Log($"Could not initialize {handler.GetType()}");
+                }
             }
             Initialized = true;
         }
 
-        internal async UniTask MakeAction(RequestActionType type, params object[] args)
+        internal async UniTask SendText(string text)
         {
             foreach (var handler in _handlers)
             {
-                if (handler.Initialized && handler.HasCapability(type))
+                if (handler.Initialized && handler.HasCapability(RequestActionType.SendText))
                 {
-                    await handler.MakeAction(type, args);
+                    await handler.MakeAction(RequestActionType.SendText, text);
+                }
+            }
+        }
+
+        internal async UniTask SendNamedAction(string name, string value = null)
+        {
+            foreach (var handler in _handlers)
+            {
+                if (handler.Initialized && handler.HasCapability(RequestActionType.SendNamedAction))
+                {
+                    await handler.MakeAction(RequestActionType.SendNamedAction, name, value);
+                }
+            }
+        }
+
+        internal async UniTask SendAudio(byte[] bytes, bool streamed)
+        {
+            var capability = streamed ? RequestActionType.SendAudioStream : RequestActionType.SendAudio;
+            foreach (var handler in _handlers)
+            {
+                if (handler.Initialized && handler.HasCapability(capability))
+                {
+                    await handler.MakeAction(capability, bytes);
+                }
+            }
+        }
+        //TODO: add class for tts processing
+        internal async UniTask ProcessTTS(string text, Action<RoomDto.BeingVoiceData> callback)
+        {
+            foreach (var handler in _handlers)
+            {
+                if (handler.Initialized && handler.HasCapability(RequestActionType.ProcessTTS))
+                {
+                    await handler.MakeAction(RequestActionType.ProcessTTS, text, callback);
                 }
             }
         }
@@ -88,7 +143,9 @@ namespace Virbe.Core
     {
         SendText = 0,
         SendNamedAction = 1,
-        SendAudio = 2 ,
-        SendAudioStream = 4 
+        SendAudio = 2,
+        SendAudioStream = 4,
+
+        ProcessTTS = 8,
     }
 }
