@@ -29,7 +29,7 @@ namespace Virbe.Core
         bool IApiBeingConfig.HasRoom => room != null;
         string IApiBeingConfig.SttPath => string.Empty;
         SttConnectionProtocol IApiBeingConfig.SttProtocol => SttConnectionProtocol.http;
-
+        TtsConnectionProtocol IApiBeingConfig.TtsConnectionProtocol => TtsConnectionProtocol.room;
         EngineType IApiBeingConfig.EngineType => EngineType.Room;
 
         RoomData IApiBeingConfig.RoomData
@@ -43,6 +43,7 @@ namespace Virbe.Core
                 return _roomData;
             }
         }
+
         private RoomData _roomData;
         public bool HasValidHostDomain()
         {

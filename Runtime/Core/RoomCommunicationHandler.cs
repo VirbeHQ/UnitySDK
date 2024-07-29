@@ -12,14 +12,16 @@ namespace Virbe.Core
 {
     internal sealed class RoomCommunicationHandler: ICommunicationHandler
     {
+        public event Action<string, Action<RoomDto.BeingVoiceData>> RequestTTSProcessing;
         bool ICommunicationHandler.Initialized => _initialized;
 
         private VirbeUserSession _currentUserSession;
         private bool _initialized;
-        private readonly RequestActionType _definedActions =
+        private RequestActionType _definedActions =
             RequestActionType.SendText |
             RequestActionType.SendNamedAction | 
-            RequestActionType.SendAudio;
+            RequestActionType.SendAudio |
+            RequestActionType.ProcessTTS;
 
         private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(RoomCommunicationHandler));
         private readonly int _poolingInterval;
@@ -38,6 +40,11 @@ namespace Virbe.Core
             _being.ConversationStarted += StartCommunication;
             _being.ConversationEnded += StartCommunication;
             _callActionToken = actionToken;
+        }
+
+        internal void OverrideDefinedActions(RequestActionType definedActions)
+        {
+            _definedActions = definedActions;
         }
 
         bool ICommunicationHandler.HasCapability(RequestActionType type) => HasCapability(type);
@@ -193,22 +200,16 @@ namespace Virbe.Core
                         {
                             try
                             {
-                                //todo: move this to tts
-                                var voiceResult = await _roomApiService.GetRoomMessageVoiceData(message);
-
-                                if(voiceResult != null)
+                                if (_config.TtsConnectionProtocol == TtsConnectionProtocol.room)
                                 {
-                                    var action = new BeingAction
-                                    {
-                                        text = messageText,
-                                        speech = voiceResult?.data,
-                                        marks = voiceResult?.marks,
-                                        cards = message?.action?.uiAction?.value?.cards,
-                                        buttons = message?.action?.uiAction?.value?.buttons,
-                                    };
+                                    var voiceResult = await _roomApiService.GetRoomMessageVoiceData(message);
                                     await UniTask.SwitchToMainThread();
-                                    _callActionToken.BeingActionFired?.Invoke(action);
+                                    ProcessResponse(message, voiceResult);
                                     await UniTask.SwitchToTaskPool();
+                                }
+                                else
+                                {
+                                    RequestTTSProcessing?.Invoke(messageText, (data) => ProcessResponse(message, data));
                                 }
                             }
                             catch (Exception e)
@@ -222,6 +223,22 @@ namespace Virbe.Core
                 {
                     _logger.LogError("Failed to get messages: " + e.Message);
                 }
+            }
+        }
+
+        private void ProcessResponse(RoomDto.RoomMessage message, RoomDto.BeingVoiceData voiceData)
+        {
+            if (voiceData != null)
+            {
+                var action = new BeingAction
+                {
+                    text = message?.action?.text?.text,
+                    speech = voiceData?.data,
+                    marks = voiceData?.marks,
+                    cards = message?.action?.uiAction?.value?.cards,
+                    buttons = message?.action?.uiAction?.value?.buttons,
+                };
+                _callActionToken.BeingActionFired?.Invoke(action);
             }
         }
 
@@ -259,6 +276,9 @@ namespace Virbe.Core
                     break;
                 case RequestActionType.SendAudio:
                     await _roomApiService.SendSpeech(args[0] as byte[]);
+                    break;
+                default:
+                    _logger.Log($"Handler {nameof(RoomCommunicationHandler)} does not support action {type}");
                     break;
             }
         }
