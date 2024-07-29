@@ -61,8 +61,12 @@ namespace Virbe.Core
 
             _ => throw new ArgumentOutOfRangeException(nameof(SttConnectionProtocol), Stt.Protocol, null)
         };
-
-
+        TtsConnectionProtocol IApiBeingConfig.TtsConnectionProtocol => Tts.Protocol switch
+        {
+            "http" => TtsConnectionProtocol.http,
+            "room" => TtsConnectionProtocol.room,
+            _ => throw new ArgumentOutOfRangeException(nameof(TtsConnectionProtocol), Tts.Protocol, null)
+        };
         string IApiBeingConfig.SttPath => Stt.Path;
 
         private RoomData _roomData;
