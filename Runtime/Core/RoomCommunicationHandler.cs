@@ -194,23 +194,15 @@ namespace Virbe.Core
                             try
                             {
                                 //todo: move this to tts
-                                var getVoiceTask = _roomApiService.GetRoomMessageVoiceData(message);
-                                await getVoiceTask;
+                                var voiceResult = await _roomApiService.GetRoomMessageVoiceData(message);
 
-                                if (getVoiceTask.IsFaulted)
-                                {
-                                    // TODO should we try to get the voice data again?
-                                    // Handle any errors that occurred during room creation
-                                    _logger.LogError("Failed to get voice data: " +
-                                                   getVoiceTask.Exception?.Message);
-                                }
-                                else if (getVoiceTask.IsCompleted)
+                                if(voiceResult != null)
                                 {
                                     var action = new BeingAction
                                     {
                                         text = messageText,
-                                        speech = getVoiceTask.Result.data,
-                                        marks = getVoiceTask.Result.marks,
+                                        speech = voiceResult?.data,
+                                        marks = voiceResult?.marks,
                                         cards = message?.action?.uiAction?.value?.cards,
                                         buttons = message?.action?.uiAction?.value?.buttons,
                                     };
