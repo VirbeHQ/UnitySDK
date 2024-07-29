@@ -17,7 +17,6 @@ namespace Virbe.Core.Speech
 
         internal static float[] PCMBytesToFloats(byte[] bytes, int sampleBits)
         {
-            Debug.Log($"Little endian: {BitConverter.IsLittleEndian}");
             int samples = sampleBits / 8;
             float[] floats = new float[bytes.Length / samples];
             for (int i = 0; i < bytes.Length; i += samples)
