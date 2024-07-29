@@ -10,6 +10,7 @@ namespace Virbe.Core
         bool HasRoom { get; }
 
         //tts
+        TtsConnectionProtocol TtsConnectionProtocol { get; }
         int AudioChannels { get; }
         int AudioFrequency { get; }
         int AudioSampleBits { get; }
