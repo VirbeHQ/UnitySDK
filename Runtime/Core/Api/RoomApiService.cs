@@ -106,7 +106,6 @@ namespace Plugins.Virbe.Core.Api
 
             if (response != null)
             {
-                UnityEngine.Debug.Log($"modified at: {this.lastRoomModifiedAt}, polling instant {this.lastPollingMessageInstant}");
                 // We update the last room change time only if we checked for new messages
                 this.lastRoomModifiedAt = modifiedAt;
 
