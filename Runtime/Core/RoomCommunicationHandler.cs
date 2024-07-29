@@ -6,56 +6,49 @@ using Plugins.Virbe.Core.Api;
 using Virbe.Core.Actions;
 using Virbe.Core.Api;
 using Virbe.Core.Logger;
-
+using static Virbe.Core.CommunicationSystem;
 
 namespace Virbe.Core
 {
-    internal sealed class RestCommunicationHandler: ICommunicationHandler
+    internal sealed class RoomCommunicationHandler: ICommunicationHandler
     {
-        event Action<UserAction> ICommunicationHandler.UserActionFired
-        {
-            add { UserActionFired += value; }
-            remove { UserActionFired -= value; }
-        }
-
-        event Action<BeingAction> ICommunicationHandler.BeingActionFired
-        {
-            add { BeingActionFired += value; }
-            remove { BeingActionFired -= value; }
-        }
-
         bool ICommunicationHandler.Initialized => _initialized;
-        bool ICommunicationHandler.AudioStreamingEnabled =>false;
 
         private VirbeUserSession _currentUserSession;
         private bool _initialized;
+        private readonly RequestActionType _definedActions =
+            RequestActionType.SendText |
+            RequestActionType.SendNamedAction | 
+            RequestActionType.SendAudio;
 
-        private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(RestCommunicationHandler));
+        private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(RoomCommunicationHandler));
         private readonly int _poolingInterval;
         private readonly IApiBeingConfig _config;
 
         private RoomApiService _roomApiService;
         private CancellationTokenSource _pollingMessagesCancelletion;
-        private event Action<BeingAction> BeingActionFired;
-        private event Action<UserAction> UserActionFired;
         private VirbeBeing _being;
+        private ActionToken _callActionToken;
 
-        internal RestCommunicationHandler(VirbeBeing being,int interval)
+        internal RoomCommunicationHandler(VirbeBeing being, CommunicationSystem.ActionToken actionToken, int interval)
         {
             _poolingInterval = interval;
             _config = being.ApiBeingConfig;
             _being = being;
             _being.ConversationStarted += StartCommunication;
             _being.ConversationEnded += StartCommunication;
+            _callActionToken = actionToken;
         }
 
-        async Task ICommunicationHandler.Prepare(string userId, string conversationId)
+        bool ICommunicationHandler.HasCapability(RequestActionType type) => HasCapability(type);
+        async Task ICommunicationHandler.Prepare(VirbeUserSession session)
         {
             EndCommunication();
-            _currentUserSession = new VirbeUserSession(userId, conversationId);
-            if(string.IsNullOrEmpty(conversationId))
+            _currentUserSession = session;
+            _roomApiService = _config.CreateRoomObject(_currentUserSession.UserId);
+
+            if (string.IsNullOrEmpty(_currentUserSession.ConversationId))
             {
-                _roomApiService = _config.CreateRoom(_currentUserSession.EndUserId);
                 var createRoomTask = _roomApiService.CreateRoom();
                 await createRoomTask;
 
@@ -67,12 +60,18 @@ namespace Virbe.Core
                 {
                     var createdRoom = createRoomTask.Result;
                     _logger.Log("Room created successfully. Room ID: " + createdRoom.id);
-                    _currentUserSession.UpdateSession(_currentUserSession.EndUserId, createdRoom.id);
+                    _currentUserSession.UpdateSession(_currentUserSession.UserId, createdRoom.id);
                 }
+            }
+            else
+            {
+                _roomApiService.OverrrideRoomId(_currentUserSession.ConversationId);
             }
           
             _initialized = true;
         }
+
+        private bool HasCapability(RequestActionType type) => (_definedActions & type) == type;
 
         internal void StartCommunication()
         {
@@ -86,9 +85,9 @@ namespace Virbe.Core
             _pollingMessagesCancelletion?.Cancel();
         }
 
-        async Task ICommunicationHandler.SendSpeech(byte[] recordedAudioBytes) 
+        private async Task SendSpeech(byte[] recordedAudioBytes) 
         {
-            if (!_config.RoomEnabled)
+            if (!_config.RoomData.Enabled)
             {
                 return;
             }
@@ -105,9 +104,35 @@ namespace Virbe.Core
             }
         }
 
-        Task ICommunicationHandler.SendNamedAction(string name, string value) => _roomApiService.SendNamedAction(name,value);
+        private async Task SendNamedAction(string name, string value)
+        {
+            var sendTask = _roomApiService.SendNamedAction(name, value);
+            await sendTask;
 
-        Task ICommunicationHandler.SendText(string text) => _roomApiService.SendText(text);
+            if (sendTask.IsFaulted)
+            {
+                _logger.Log("Failed to send namedAction: " + sendTask.Exception?.Message);
+            }
+            else if (sendTask.IsCompleted)
+            {
+                _logger.Log("Sent namedAction");
+            }
+        }
+
+        private async Task SendText(string text)
+        {
+            var sendTask = _roomApiService.SendText(text);
+            await sendTask;
+
+            if (sendTask.IsFaulted)
+            {
+                _logger.Log("Failed to send text: " + sendTask.Exception?.Message);
+            }
+            else if (sendTask.IsCompleted)
+            {
+                _logger.Log("Sent text");
+            }
+        }
 
         private async UniTaskVoid MessagePollingTask(CancellationToken cancellationToken)
         {
@@ -150,7 +175,7 @@ namespace Virbe.Core
                         if (message.participantType == "EndUser")
                         {
                             await UniTask.SwitchToMainThread();
-                            UserActionFired?.Invoke(new UserAction(message.action?.text?.text));
+                            _callActionToken.UserActionFired?.Invoke(new UserAction(message.action?.text?.text));
                         }
                         else if (message.participantType == "Api" || message.participantType == "User")
                         {
@@ -177,7 +202,7 @@ namespace Virbe.Core
                                         cards = message?.action?.uiAction?.value?.cards,
                                         buttons = message?.action?.uiAction?.value?.buttons,
                                     };
-                                    BeingActionFired?.Invoke(action);
+                                    _callActionToken.BeingActionFired?.Invoke(action);
                                 }
                             }
                             catch (Exception e)
@@ -198,12 +223,38 @@ namespace Virbe.Core
         {
             _initialized = false;
             EndCommunication();
-            UserActionFired = null;
-            BeingActionFired = null;
+            _callActionToken = null;
             _currentUserSession = null;
             _roomApiService = null;
             _being.ConversationStarted -= StartCommunication;
             _being.ConversationEnded -= StartCommunication;
+        }
+
+        async Task ICommunicationHandler.MakeAction(RequestActionType type, params object[] args)
+        {
+            if (!_initialized)
+            {
+                _logger.Log("Handler not initialized");
+                return;
+            }
+            if(!HasCapability(type))
+            {
+                _logger.Log($"Handler {nameof(RoomCommunicationHandler)} does not support action {type}");
+                return;
+            }
+            switch (type)
+            {
+                case RequestActionType.SendText:
+                    await _roomApiService.SendText(args[0] as string); 
+                    break;
+                case RequestActionType.SendNamedAction:
+                    var value = args.Length >1 ? args[1] : null;
+                    await _roomApiService.SendNamedAction(args[0] as string, value as string);
+                    break;
+                case RequestActionType.SendAudio:
+                    await _roomApiService.SendSpeech(args[0] as byte[]);
+                    break;
+            }
         }
     }
 }
