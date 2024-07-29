@@ -30,14 +30,14 @@ namespace Plugins.Virbe.Core.Api
             this.lastPollingMessageInstant = DateTime.Now;
         }
 
-        public async Task<T> Get<T>(string path)
+        public async Task<T> Get<T>(string path, bool ensureSuccess = true)
         {
-            return await Request<T>($"{this.endpoint}{path}", "GET", this.headers);
+            return await Request<T>($"{this.endpoint}{path}", "GET", this.headers, ensureSuccess);
         }
 
         public async Task<T> Post<T>(string path, object body)
         {
-            return await Request<T>($"{this.endpoint}{path}", "POST", this.headers, body);
+            return await Request<T>($"{this.endpoint}{path}", "POST", this.headers, true, body);
         }
 
         public async Task<RoomDto.Room> CreateRoom()
@@ -124,7 +124,7 @@ namespace Plugins.Virbe.Core.Api
 
         public async Task<RoomDto.BeingVoiceData> GetRoomMessageVoiceData(RoomDto.RoomMessage roomMessage)
         {
-            return await this.Get<RoomDto.BeingVoiceData>($"/{this.roomId}/messages/{roomMessage.id}/voice-data");
+            return await this.Get<RoomDto.BeingVoiceData>($"/{this.roomId}/messages/{roomMessage.id}/voice-data", false);
         }
 
         internal void OverrrideRoomId(string roomId)
@@ -132,8 +132,7 @@ namespace Plugins.Virbe.Core.Api
             this.roomId = roomId;
         }
 
-
-        private async Task<T> Request<T>(string endpoint, string method, Dictionary<string, string> headers,
+        private async Task<T> Request<T>(string endpoint, string method, Dictionary<string, string> headers, bool ensureSuccess,
             object body = null)
         {
             var httpClient = new HttpClient();
@@ -154,7 +153,15 @@ namespace Plugins.Virbe.Core.Api
             }
 
             var response = await httpClient.SendAsync(request);
-            response.EnsureSuccessStatusCode();
+
+            if (ensureSuccess)
+            {
+                response.EnsureSuccessStatusCode();
+            }
+            else if (response.StatusCode != System.Net.HttpStatusCode.OK)
+            {
+                return default(T);
+            }
 
             var responseJson = await response.Content.ReadAsStringAsync();
             var responseData = JsonConvert.DeserializeObject<T>(responseJson);
