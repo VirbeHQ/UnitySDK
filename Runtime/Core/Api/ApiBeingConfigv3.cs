@@ -23,24 +23,31 @@ namespace Virbe.Core
         [JsonProperty("configuration")]
         public Configuration Configuration { get; set; }
 
-        private Uri RoomUri => new Uri(Conversation?.Room?.RoomUrl);
-        private string HostDomain => !string.IsNullOrEmpty(Conversation?.Room?.RoomUrl) ? RoomUri.GetLeftPart(UriPartial.Authority) : null;
-        private string RoomApiAccessKey => Conversation?.Room?.RoomApiAccessKey;
-
         string IApiBeingConfig.BaseUrl => BaseUrl;
-        string IApiBeingConfig.RoomUrl => Conversation?.Room?.RoomUrl;
 
-        string IApiBeingConfig.HostDomain => HostDomain;
+        EngineType IApiBeingConfig.EngineType => Conversation?.Engine switch
+        {
+            "room" => EngineType.Room,
+            "virbe-ai" => EngineType.VirbeAi,
+            _ => throw new NotImplementedException()
+        };
 
-        string IApiBeingConfig.RoomApiAccessKey => RoomApiAccessKey;
-
+        RoomData IApiBeingConfig.RoomData
+        {
+            get
+            {
+                if(_roomData == null && Conversation?.Room != null)
+                {
+                    _roomData = new RoomData(Conversation?.Room?.RoomApiAccessKey, Conversation?.Room?.RoomUrl, Conversation?.Room?.Enabled ?? false);
+                }
+                return _roomData;
+            }
+        }
         int IApiBeingConfig.AudioChannels => Tts.AudioChannels;
 
         int IApiBeingConfig.AudioFrequency => Tts.AudioFrequency;
 
         int IApiBeingConfig.AudioSampleBits => Tts.AudioSampleBits;
-
-        bool IApiBeingConfig.RoomEnabled => Conversation?.Room?.Enabled ?? false;
 
         bool IApiBeingConfig.HasRoom => Conversation?.Room != null;
 
@@ -58,16 +65,9 @@ namespace Virbe.Core
 
         string IApiBeingConfig.SttPath => Stt.Path;
 
-        bool IApiBeingConfig.HasValidHostDomain()
-        {
-            return !string.IsNullOrEmpty(HostDomain);
-        }
+        private RoomData _roomData;
 
-        bool IApiBeingConfig.HasValidApiAccessKey()
-        {
-            return !string.IsNullOrEmpty(RoomApiAccessKey);
-        }
-        RoomApiService IApiBeingConfig.CreateRoom(string endUserId) 
+        RoomApiService IApiBeingConfig.CreateRoomObject(string endUserId) 
             => new RoomApiService(Conversation?.Room?.RoomUrl, 
                 Conversation?.Room?.RoomApiAccessKey,
                 Location.Id,
@@ -149,14 +149,6 @@ namespace Virbe.Core
 
         [JsonProperty("path")]
         internal string Path { get; set; }
-    }
-
-    public enum SttConnectionProtocol {
-        local, 
-        http,
-        sse, 
-        ws, 
-        socket_io,
     }
 
     public class TTS

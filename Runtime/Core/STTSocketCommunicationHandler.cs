@@ -4,47 +4,32 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
-using Plugins.Virbe.Core.Api;
-using Virbe.Core.Actions;
 using Virbe.Core.Api;
 using Virbe.Core.Logger;
 using Virbe.Core.Speech;
 
-
 namespace Virbe.Core
 {
-    internal sealed class SocketCommunicationHandler: ICommunicationHandler
+    internal sealed class STTSocketCommunicationHandler: ICommunicationHandler
     {
-        bool ICommunicationHandler.Initialized => _initialized;
-        bool ICommunicationHandler.AudioStreamingEnabled => true;
-        event Action<UserAction> ICommunicationHandler.UserActionFired
-        {
-            add { UserActionFired += value; }
-            remove { UserActionFired -= value; }
-        }
+        internal event Action<string> RequestTextSend;
 
-        event Action<BeingAction> ICommunicationHandler.BeingActionFired
-        {
-            add { BeingActionFired += value; }
-            remove { BeingActionFired -= value; }
-        }
+        bool ICommunicationHandler.Initialized => _initialized;
+        private readonly RequestActionType _definedActions = RequestActionType.SendAudioStream;
 
         private bool _initialized;
-        private VirbeUserSession CurrentUserSession;
-        private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(SocketCommunicationHandler));
+        private VirbeUserSession _currentUserSession;
+        private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(STTSocketCommunicationHandler));
         private SocketIOClient.SocketIO _socketSttClient;
         private ConcurrentQueue<byte[]> _speechBytesAwaitingSend = new ConcurrentQueue<byte[]>();
         private StringBuilder _currentSttResult = new StringBuilder();
-        private RoomApiService _roomApiService;
 
         private CancellationTokenSource _sttSocketTokenSource;
         private CancellationTokenSource _audioSocketSenderTokenSource;
         private IApiBeingConfig _apiBeingConfig;
         private VirbeBeing _being;
-        private event Action<BeingAction> BeingActionFired;
-        private event Action<UserAction> UserActionFired;
 
-        internal SocketCommunicationHandler(VirbeBeing being)
+        internal STTSocketCommunicationHandler(VirbeBeing being)
         {
             _being = being;
             _apiBeingConfig = being.ApiBeingConfig;
@@ -52,28 +37,16 @@ namespace Virbe.Core
             _being.UserStopSpeaking += CloseSocket;
         }
 
-        async Task ICommunicationHandler.Prepare(string userId, string conversationId)
+        bool ICommunicationHandler.HasCapability(RequestActionType type)
         {
-            CurrentUserSession = new VirbeUserSession(userId, conversationId);
-            if (string.IsNullOrEmpty(conversationId))
-            {
-                _roomApiService = _apiBeingConfig.CreateRoom(CurrentUserSession.EndUserId);
-                var createRoomTask = _roomApiService.CreateRoom();
-                await createRoomTask;
+            return (_definedActions & type) == type;
+        }
 
-                if (createRoomTask.IsFaulted)
-                {
-                    _logger.LogError("Failed to create room: " + createRoomTask.Exception?.Message);
-                }
-                else if (createRoomTask.IsCompleted)
-                {
-                    var createdRoom = createRoomTask.Result;
-                    _logger.Log("Room created successfully. Room ID: " + createdRoom.id);
-                    CurrentUserSession.UpdateSession(CurrentUserSession.EndUserId, createdRoom.id);
-                }
-            }
-
+         Task ICommunicationHandler.Prepare(VirbeUserSession session)
+        {
+            _currentUserSession = session;
             _initialized = true;
+            return Task.CompletedTask;
         }
 
         internal void OpenSocket()
@@ -90,24 +63,19 @@ namespace Virbe.Core
             DisposeSocketConnection();
         }
 
-        Task ICommunicationHandler.SendSpeech(byte[] recordedAudioBytes)
+        private void SendSpeech(byte[] recordedAudioBytes)
         {
-            if (!_apiBeingConfig.RoomEnabled)
+            if (!_apiBeingConfig.RoomData.Enabled)
             {
-                return Task.CompletedTask;
+                return;
             }
             if (_socketSttClient == null)
             {
                 _logger.LogError($"[VIRBE] Socket not created, could not send speech chunk");
-                return Task.CompletedTask;
+                return;
             }
             _speechBytesAwaitingSend.Enqueue(recordedAudioBytes);
-            return Task.CompletedTask;
         }
-
-        Task ICommunicationHandler.SendNamedAction(string name, string value) => _roomApiService.SendNamedAction(name, value);
-
-        Task ICommunicationHandler.SendText(string text) => _roomApiService.SendText(text);
 
         private async UniTaskVoid SocketAudioSendLoop(CancellationToken cancelationToken)
         {
@@ -179,18 +147,18 @@ namespace Virbe.Core
             _socketSttClient.OnDisconnected += async (sender, args) =>
             {
                 _sttSocketTokenSource?.Cancel();
-                SendTextFromRresult().Forget();
+                SendTextFromRresult();
                 _logger.Log($"Disconnected from the stt socket {args}");
             };
 
             await _socketSttClient.ConnectAsync(_sttSocketTokenSource.Token);
         }
 
-        private async UniTaskVoid SendTextFromRresult()
+        private void SendTextFromRresult()
         {
             if (_currentSttResult.Length > 0)
             {
-                await _roomApiService.SendText(_currentSttResult.ToString());
+                RequestTextSend?.Invoke(_currentSttResult.ToString());
                 _currentSttResult.Clear();
             }
         }
@@ -200,8 +168,7 @@ namespace Virbe.Core
             _sttSocketTokenSource?.Cancel();
             var tempSocketHandle = _socketSttClient;
             await Task.Delay(1000);
-            SendTextFromRresult().Forget();
-            _currentSttResult.Clear();
+            SendTextFromRresult();
             await tempSocketHandle.DisconnectAsync();
             tempSocketHandle.Dispose();
             tempSocketHandle = null;
@@ -211,10 +178,15 @@ namespace Virbe.Core
         {
             _initialized = false;
             CloseSocket();
-            CurrentUserSession = null;
-            _roomApiService = null;
+            _currentUserSession = null;
+            RequestTextSend = null;
             _being.UserStartSpeaking -= OpenSocket;
             _being.UserStopSpeaking -= CloseSocket;
+        }
+
+        Task ICommunicationHandler.MakeAction(RequestActionType type, params object[] args)
+        {
+            throw new NotImplementedException();
         }
     }
 }
