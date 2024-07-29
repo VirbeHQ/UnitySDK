@@ -27,8 +27,8 @@ namespace Virbe.Core
             _apiBeingConfig = being.ApiBeingConfig;
             _being = being;
             _callActionToken = new ActionToken();
-            _callActionToken.UserActionFired += UserActionFired;
-            _callActionToken.BeingActionFired += BeingActionFired;
+            _callActionToken.UserActionFired += (args) => UserActionFired?.Invoke(args);
+            _callActionToken.BeingActionFired += (args) => BeingActionFired?.Invoke(args);
 
             if (_apiBeingConfig.HasRoom && _apiBeingConfig.EngineType == EngineType.Room)
             {

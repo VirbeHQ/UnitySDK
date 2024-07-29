@@ -41,6 +41,7 @@ namespace Virbe.Core
         }
 
         bool ICommunicationHandler.HasCapability(RequestActionType type) => HasCapability(type);
+
         async Task ICommunicationHandler.Prepare(VirbeUserSession session)
         {
             EndCommunication();
@@ -136,9 +137,15 @@ namespace Virbe.Core
 
         private async UniTaskVoid MessagePollingTask(CancellationToken cancellationToken)
         {
+            await UniTask.SwitchToTaskPool();
             while (!cancellationToken.IsCancellationRequested)
             {
                 await Task.Delay(_poolingInterval);
+
+                if (_roomApiService == null || !_initialized)
+                {
+                    return;
+                }
 
                 try
                 {
@@ -171,11 +178,16 @@ namespace Virbe.Core
                     messages.results.Reverse();
                     foreach (var message in messages.results)
                     {
-                        _logger.Log("Got message: " + message?.action?.text?.text);
+                        var messageText = message?.action?.text?.text;
+                        if (!string.IsNullOrEmpty(messageText))
+                        {
+                            _logger.Log("Got message: " + messageText);
+                        }
                         if (message.participantType == "EndUser")
                         {
                             await UniTask.SwitchToMainThread();
                             _callActionToken.UserActionFired?.Invoke(new UserAction(message.action?.text?.text));
+                            await UniTask.SwitchToTaskPool();
                         }
                         else if (message.participantType == "Api" || message.participantType == "User")
                         {
@@ -196,13 +208,15 @@ namespace Virbe.Core
                                 {
                                     var action = new BeingAction
                                     {
-                                        text = message?.action?.text.text,
+                                        text = messageText,
                                         speech = getVoiceTask.Result.data,
                                         marks = getVoiceTask.Result.marks,
                                         cards = message?.action?.uiAction?.value?.cards,
                                         buttons = message?.action?.uiAction?.value?.buttons,
                                     };
+                                    await UniTask.SwitchToMainThread();
                                     _callActionToken.BeingActionFired?.Invoke(action);
+                                    await UniTask.SwitchToTaskPool();
                                 }
                             }
                             catch (Exception e)
