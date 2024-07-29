@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 8607395153256392551}
   - component: {fileID: 7177672089625168749}
   - component: {fileID: 8338689435292289972}
+  - component: {fileID: 6298560547158109033}
   m_Layer: 0
   m_Name: VirbeBeingRPM
   m_TagString: Untagged
@@ -238,3 +239,17 @@ MonoBehaviour:
   onConversationError:
     m_PersistentCalls:
       m_Calls: []
+--- !u!114 &6298560547158109033
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5117095562553907051}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ebfbdd48c4eec714eb893d6f10552efc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _voiceRecorder: {fileID: 0}
+  _being: {fileID: 8338689435292289972}
