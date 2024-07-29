@@ -4,28 +4,19 @@ namespace Virbe.Core.Api
 {
     public class VirbeUserSession
     {
-        private string _endUserId;
-        private string _roomId;
+        public string UserId { get; private set; }
+        public string ConversationId { get; private set; }
 
-        public VirbeUserSession(string endUserId = null, string roomId = null)
+        public VirbeUserSession(string endUserId = null, string conversationId = null)
         {
-            this._endUserId = endUserId ?? Guid.NewGuid().ToString();
-            this._roomId = roomId;
+            UserId = endUserId ?? Guid.NewGuid().ToString();
+            ConversationId = conversationId;
         }
 
-        public string EndUserId => _endUserId;
-
-        public string RoomId => _roomId;
-
-        public void UpdateSession(string endUserId, string roomId)
+        public void UpdateSession(string endUserId, string conversationId)
         {
-            this._endUserId = endUserId;
-            this._roomId = roomId;
-        }
-
-        public bool HasRoomId()
-        {
-            return !string.IsNullOrEmpty(RoomId);
+            UserId = endUserId;
+            ConversationId = conversationId;
         }
     }
 }

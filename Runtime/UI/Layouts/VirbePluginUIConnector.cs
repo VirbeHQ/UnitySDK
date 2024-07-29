@@ -54,7 +54,7 @@ namespace Virbe.UI.Layouts
         public void SubmitText(string text)
         {
             _virbeBeing?.StopCurrentAndScheduledActions();
-            _virbeBeing?.SendText(text).Forget();
+            _virbeBeing?.SendText(text);
             onCustomTextSubmitEvent.Invoke(text);
         }
         
@@ -65,13 +65,13 @@ namespace Virbe.UI.Layouts
 
         public void CancelInput(Core.Custom.Input input)
         {
-            _virbeBeing.SendText(input.CancelButton.Payload).Forget();
+            _virbeBeing.SendText(input.CancelButton.Payload);
         }
         
         public void OnQuickReplyClicked(Button button)
         {
             _virbeBeing?.StopCurrentAndScheduledActions();
-            _virbeBeing?.SendText(button.Payload).Forget();
+            _virbeBeing?.SendText(button.Payload);
             onCustomQuickReplyEvent.Invoke(button);
             if (!String.IsNullOrEmpty(button.CallbackURL))
             {
