@@ -74,8 +74,6 @@ namespace Virbe.Core.Actions
         {
             currentBeingAction = beingAction;
 
-            Debug.Log("Playing action: " + beingAction);
-
             _virbeBeing?.OnBeingActionStarted(beingAction);
 
             _virbeSpeechPlayer?.Play(beingAction.marks);
@@ -108,8 +106,6 @@ namespace Virbe.Core.Actions
             {
                 var audioClip = AudioClip.Create("clip", audioBytes.Length, ttsConfig.AudioChannels,
                     ttsConfig.AudioFrequency, false, null);
-                Debug.Log(
-                    $"Samples: {audioClip.samples}, frequency: {audioClip.frequency}, channels: {audioClip.channels}");
                 audioClip.SetData(AudioConverter.PCMBytesToFloats(audioBytes, ttsConfig.AudioSampleBits), 0);
 
                 outputAudioSource.Stop();
@@ -140,12 +136,7 @@ namespace Virbe.Core.Actions
             }
         }
 
-        public void ScheduleNewAction(BeingAction action)
-        {
-            Debug.Log($"Scheduling new action: {action}");
-            // TODO implement FIFO queue for actions to be used by Update Loop
-            _beingActionsQueue.Enqueue(action);
-        }
+        public void ScheduleNewAction(BeingAction action) => _beingActionsQueue.Enqueue(action);
 
         private void Update()
         {
