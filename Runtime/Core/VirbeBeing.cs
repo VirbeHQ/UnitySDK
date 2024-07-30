@@ -267,22 +267,6 @@ namespace Virbe.Core
             _virbeActionPlayer.StopCurrentAndScheduledActions();
         }
 
-        private void ProcessAudioAction(RoomDto.RoomMessage message, RoomDto.BeingVoiceData voiceData)
-        {
-            if (voiceData != null)
-            {
-                var action = new BeingAction
-                {
-                    text = message?.action?.text?.text,
-                    speech = voiceData?.data,
-                    marks = voiceData?.marks,
-                    cards = message?.action?.uiAction?.value?.cards,
-                    buttons = message?.action?.uiAction?.value?.buttons,
-                };
-                _virbeActionPlayer.ScheduleNewAction(action);
-            }
-        }
-
         private async UniTask RestoreConversation(string endUserId, string roomId)
         {
             await _communicationSystem.InitializeWith(endUserId, roomId);

@@ -6,14 +6,9 @@ namespace Virbe.Core
     {
         string BaseUrl { get; }
         EngineType EngineType { get; }
-        RoomData RoomData { get; }
         bool HasRoom { get; }
-
-        //tts
-        TtsConnectionProtocol TtsConnectionProtocol { get; }
-        int AudioChannels { get; }
-        int AudioFrequency { get; }
-        int AudioSampleBits { get; }
+        RoomData RoomData { get; }
+        TTSData TTSData { get; }
 
         //stt
         SttConnectionProtocol SttProtocol { get; }
