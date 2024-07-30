@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,7 +20,6 @@ namespace Virbe.Core
         private readonly RequestActionType _definedActions = RequestActionType.SendAudioStream;
 
         private bool _initialized;
-        private VirbeUserSession _currentUserSession;
         private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(STTSocketCommunicationHandler));
         private SocketIOClient.SocketIO _socketSttClient;
         private ConcurrentQueue<byte[]> _speechBytesAwaitingSend = new ConcurrentQueue<byte[]>();
@@ -30,12 +30,9 @@ namespace Virbe.Core
         private IApiBeingConfig _apiBeingConfig;
         private VirbeBeing _being;
 
-        internal STTSocketCommunicationHandler(VirbeBeing being)
+        internal STTSocketCommunicationHandler(IApiBeingConfig config)
         {
-            _being = being;
-            _apiBeingConfig = being.ApiBeingConfig;
-            _being.UserStartSpeaking += OpenSocket;
-            _being.UserStopSpeaking += CloseSocket;
+            _apiBeingConfig = config;
         }
 
         bool ICommunicationHandler.HasCapability(RequestActionType type)
@@ -45,7 +42,6 @@ namespace Virbe.Core
 
         Task ICommunicationHandler.Prepare(VirbeUserSession session)
         {
-            _currentUserSession = session;
             _initialized = true;
             return Task.CompletedTask;
         }
@@ -171,7 +167,7 @@ namespace Virbe.Core
         {
             _sttSocketTokenSource?.Cancel();
             var tempSocketHandle = _socketSttClient;
-            await Task.Delay(2500);
+            await Task.Delay(1500);
             SendTextFromRresult();
             await tempSocketHandle.DisconnectAsync();
             tempSocketHandle.Dispose();
@@ -182,19 +178,17 @@ namespace Virbe.Core
         {
             _initialized = false;
             CloseSocket();
-            _currentUserSession = null;
-            RequestTextSend = null;
             _being.UserStartSpeaking -= OpenSocket;
             _being.UserStopSpeaking -= CloseSocket;
         }
 
-        Task ICommunicationHandler.MakeAction(RequestActionType type, params object[] args)
+        UniTask ICommunicationHandler.MakeAction(RequestActionType type, params object[] args)
         {
             if(type == RequestActionType.SendAudioStream)
             {
                 SendSpeech(args[0] as byte[]);
             }
-            return Task.CompletedTask;
+            return UniTask.CompletedTask;
         }
     }
 }
