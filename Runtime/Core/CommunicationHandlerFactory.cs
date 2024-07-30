@@ -33,27 +33,26 @@ namespace Virbe.Core
 
             if (_apiBeingConfig.HasRoom && _apiBeingConfig.EngineType == EngineType.Room)
             {
-                var roomHandler = new RoomCommunicationHandler(_being, _callActionToken, 500);
+                var roomSendingAudio = _apiBeingConfig.SttProtocol == SttConnectionProtocol.http;
+                var roomHandler = new RoomCommunicationHandler(_apiBeingConfig, _callActionToken, roomSendingAudio, 500);
+                _being.ConversationStarted += roomHandler.StartCommunication;
+                _being.ConversationEnded += roomHandler.EndCommunication;
                 roomHandler.RequestTTSProcessing += (text, callback) => ProcessTTS( text, callback).Forget();
-                //in case of stt protocol different than http do not send audio from room handler
-                var defindedActions = RequestActionType.SendText | RequestActionType.SendNamedAction;
-                if(_apiBeingConfig.TtsConnectionProtocol == TtsConnectionProtocol.http)
-                {
-                    defindedActions |= RequestActionType.ProcessTTS;
-                }
-                if (_apiBeingConfig.SttProtocol == SttConnectionProtocol.http)
-                {
-                    defindedActions |= RequestActionType.SendAudio;
-                }
-                roomHandler.OverrideDefinedActions(defindedActions);
+
                 _handlers.Add(roomHandler);
             }
             if (_apiBeingConfig.SttProtocol == SttConnectionProtocol.socket_io)
             {
-                var socketHandler = new STTSocketCommunicationHandler(being);
+                var socketHandler = new STTSocketCommunicationHandler(_apiBeingConfig);
+                _being.UserStartSpeaking += socketHandler.OpenSocket;
+                _being.UserStopSpeaking += socketHandler.CloseSocket;
                 socketHandler.RequestTextSend += (text) => SendText( text).Forget(); 
-               
                 _handlers.Add(socketHandler);
+            }
+            if(_apiBeingConfig.TTSData.TtsConnectionProtocol == TtsConnectionProtocol.http)
+            {
+                var ttsRestHandler = new TTSCommunicationHandler(_apiBeingConfig);
+                _handlers.Add(ttsRestHandler);
             }
         }
 
@@ -107,14 +106,16 @@ namespace Virbe.Core
                 }
             }
         }
+
         //TODO: add class for tts processing
-        internal async UniTask ProcessTTS(string text, Action<RoomDto.BeingVoiceData> callback)
+        internal async UniTaskVoid ProcessTTS(string text, Action<RoomDto.BeingVoiceData> callback)
         {
             foreach (var handler in _handlers)
             {
                 if (handler.Initialized && handler.HasCapability(RequestActionType.ProcessTTS))
                 {
                     await handler.MakeAction(RequestActionType.ProcessTTS, text, callback);
+                    return;
                 }
             }
         }
