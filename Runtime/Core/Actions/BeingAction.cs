@@ -31,11 +31,11 @@ namespace Virbe.Core.Actions
             return speech != null;
         }
 
-        public float GetAudioLength(IApiBeingConfig ttsConfig)
+        public float GetAudioLength(IApiBeingConfig beingConfig)
         {
             return speech?.Length > 0
-                ? ((float)speech.Length) / ttsConfig.AudioChannels / (ttsConfig.AudioSampleBits / 8f) /
-                  ttsConfig.AudioFrequency
+                ? ((float)speech.Length) / beingConfig.TTSData.AudioChannels / (beingConfig.TTSData.AudioSampleBits / 8f) /
+                  beingConfig.TTSData.AudioFrequency
                 : 0;
         }
 
