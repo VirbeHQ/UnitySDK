@@ -19,9 +19,8 @@ namespace Virbe.Core
         private bool _initialized;
         private RequestActionType _definedActions =
             RequestActionType.SendText |
-            RequestActionType.SendNamedAction | 
-            RequestActionType.SendAudio |
-            RequestActionType.ProcessTTS;
+            RequestActionType.SendNamedAction |
+            RequestActionType.SendAudio;
 
         private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(RoomCommunicationHandler));
         private readonly int _poolingInterval;
@@ -32,19 +31,15 @@ namespace Virbe.Core
         private VirbeBeing _being;
         private ActionToken _callActionToken;
 
-        internal RoomCommunicationHandler(VirbeBeing being, CommunicationSystem.ActionToken actionToken, int interval)
+        internal RoomCommunicationHandler(IApiBeingConfig config, CommunicationSystem.ActionToken actionToken, bool sendingAudio, int interval = 500)
         {
             _poolingInterval = interval;
-            _config = being.ApiBeingConfig;
-            _being = being;
-            _being.ConversationStarted += StartCommunication;
-            _being.ConversationEnded += StartCommunication;
+            _config = config;
             _callActionToken = actionToken;
-        }
-
-        internal void OverrideDefinedActions(RequestActionType definedActions)
-        {
-            _definedActions = definedActions;
+            if (!sendingAudio)
+            {
+                _definedActions = RequestActionType.SendText | RequestActionType.SendNamedAction;
+            }
         }
 
         bool ICommunicationHandler.HasCapability(RequestActionType type) => HasCapability(type);
@@ -200,14 +195,12 @@ namespace Virbe.Core
                         {
                             try
                             {
-                                if (_config.TtsConnectionProtocol == TtsConnectionProtocol.room)
+                                if (_config.TTSData.TtsConnectionProtocol == TtsConnectionProtocol.room)
                                 {
                                     var voiceResult = await _roomApiService.GetRoomMessageVoiceData(message);
-                                    await UniTask.SwitchToMainThread();
                                     ProcessResponse(message, voiceResult);
-                                    await UniTask.SwitchToTaskPool();
                                 }
-                                else
+                                else if(!string.IsNullOrEmpty(messageText))
                                 {
                                     RequestTTSProcessing?.Invoke(messageText, (data) => ProcessResponse(message, data));
                                 }
@@ -253,7 +246,7 @@ namespace Virbe.Core
             _being.ConversationEnded -= StartCommunication;
         }
 
-        async Task ICommunicationHandler.MakeAction(RequestActionType type, params object[] args)
+        async UniTask ICommunicationHandler.MakeAction(RequestActionType type, params object[] args)
         {
             if (!_initialized)
             {
