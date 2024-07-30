@@ -31,6 +31,18 @@ namespace Virbe.Core
             "virbe-ai" => EngineType.VirbeAi,
             _ => throw new NotImplementedException()
         };
+        TTSData IApiBeingConfig.TTSData
+        {
+            get
+            {
+                if (_ttsData == null && Tts != null)
+                {
+                    _ttsData = new TTSData(TTSProtocol, Tts.AudioChannels, Tts.AudioFrequency, Tts.AudioSampleBits, Tts.Path);
+                }
+                return _ttsData;
+            }
+        }
+        private TTSData _ttsData;
 
         RoomData IApiBeingConfig.RoomData
         {
@@ -43,14 +55,10 @@ namespace Virbe.Core
                 return _roomData;
             }
         }
-        int IApiBeingConfig.AudioChannels => Tts.AudioChannels;
-
-        int IApiBeingConfig.AudioFrequency => Tts.AudioFrequency;
-
-        int IApiBeingConfig.AudioSampleBits => Tts.AudioSampleBits;
+        private RoomData _roomData;
 
         bool IApiBeingConfig.HasRoom => Conversation?.Room != null;
-
+        string IApiBeingConfig.SttPath => Stt.Path;
         SttConnectionProtocol IApiBeingConfig.SttProtocol => Stt.Protocol switch
         {
             "local" => SttConnectionProtocol.local,
@@ -61,15 +69,13 @@ namespace Virbe.Core
 
             _ => throw new ArgumentOutOfRangeException(nameof(SttConnectionProtocol), Stt.Protocol, null)
         };
-        TtsConnectionProtocol IApiBeingConfig.TtsConnectionProtocol => Tts.Protocol switch
+        private TtsConnectionProtocol TTSProtocol => Tts.Protocol switch
         {
             "http" => TtsConnectionProtocol.http,
             "room" => TtsConnectionProtocol.room,
             _ => throw new ArgumentOutOfRangeException(nameof(TtsConnectionProtocol), Tts.Protocol, null)
         };
-        string IApiBeingConfig.SttPath => Stt.Path;
 
-        private RoomData _roomData;
 
         RoomApiService IApiBeingConfig.CreateRoomObject(string endUserId) 
             => new RoomApiService(Conversation?.Room?.RoomUrl, 
