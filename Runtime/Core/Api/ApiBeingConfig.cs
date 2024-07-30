@@ -23,13 +23,9 @@ namespace Virbe.Core
 
         public string HostDomain => !string.IsNullOrEmpty(room?.roomUrl) ? new Uri(room?.roomUrl).GetLeftPart(UriPartial.Authority) : null;
         string IApiBeingConfig.BaseUrl => HostDomain;
-        int IApiBeingConfig.AudioChannels => ttsConfig.audioChannels;
-        int IApiBeingConfig.AudioFrequency => ttsConfig.audioFrequency;
-        int IApiBeingConfig.AudioSampleBits => ttsConfig.audioSampleBits;
         bool IApiBeingConfig.HasRoom => room != null;
         string IApiBeingConfig.SttPath => string.Empty;
         SttConnectionProtocol IApiBeingConfig.SttProtocol => SttConnectionProtocol.http;
-        TtsConnectionProtocol IApiBeingConfig.TtsConnectionProtocol => TtsConnectionProtocol.room;
         EngineType IApiBeingConfig.EngineType => EngineType.Room;
 
         RoomData IApiBeingConfig.RoomData
@@ -43,8 +39,20 @@ namespace Virbe.Core
                 return _roomData;
             }
         }
-
         private RoomData _roomData;
+
+        TTSData IApiBeingConfig.TTSData
+        {
+            get
+            {
+                if (_ttsData == null && ttsConfig != null)
+                {
+                    _ttsData = new TTSData(TtsConnectionProtocol.room, ttsConfig.audioChannels, ttsConfig.audioFrequency, ttsConfig.audioSampleBits, string.Empty);
+                }
+                return _ttsData;
+            }
+        }
+        private TTSData _ttsData;
         public bool HasValidHostDomain()
         {
             return !string.IsNullOrEmpty(HostDomain);
