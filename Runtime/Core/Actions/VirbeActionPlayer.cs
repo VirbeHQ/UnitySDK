@@ -100,13 +100,13 @@ namespace Virbe.Core.Actions
             }
         }
 
-        public bool PlayVoice(byte[] audioBytes, IApiBeingConfig ttsConfig)
+        public bool PlayVoice(byte[] audioBytes, IApiBeingConfig beingConfig)
         {
             if (outputAudioSource && audioBytes.Length > 0)
             {
-                var audioClip = AudioClip.Create("clip", audioBytes.Length, ttsConfig.AudioChannels,
-                    ttsConfig.AudioFrequency, false, null);
-                audioClip.SetData(AudioConverter.PCMBytesToFloats(audioBytes, ttsConfig.AudioSampleBits), 0);
+                var audioClip = AudioClip.Create("clip", audioBytes.Length, beingConfig.TTSData.AudioChannels,
+                    beingConfig.TTSData.AudioFrequency, false, null);
+                audioClip.SetData(AudioConverter.PCMBytesToFloats(audioBytes, beingConfig.TTSData.AudioSampleBits), 0);
 
                 outputAudioSource.Stop();
                 outputAudioSource.clip = audioClip;
