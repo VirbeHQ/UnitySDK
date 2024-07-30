@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Cysharp.Threading.Tasks;
+using System;
 using System.Threading.Tasks;
 using Virbe.Core.Api;
 
@@ -10,6 +11,6 @@ namespace Virbe.Core
         public bool HasCapability(RequestActionType type);
 
         Task Prepare(VirbeUserSession session);
-        Task MakeAction(RequestActionType type, params object[] args);
+        UniTask MakeAction(RequestActionType type, params object[] args);
     }
 }
