@@ -1,16 +1,12 @@
 ﻿namespace Virbe.Core
 {
-    public enum SttConnectionProtocol {
+    public enum ConnectionProtocol
+    {
+        unknown,
         local, 
         http,
-        sse, 
         ws, 
+        wsEndless,
         socket_io,
-    }
-
-    public enum TtsConnectionProtocol
-    {
-        room,
-        http,
     }
 }
