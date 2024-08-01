@@ -2,15 +2,15 @@
 {
     public class TTSData
     {
-        public TtsConnectionProtocol TtsConnectionProtocol { get; }
+        public ConnectionProtocol ConnectionProtocol { get; }
         public int AudioChannels { get; }
         public int AudioFrequency { get; }
         public int AudioSampleBits { get; }
         public string Path { get; }
 
-        public TTSData(TtsConnectionProtocol ttsConnectionProtocol, int audioChannels, int audioFrequency, int audioSampleBits, string path)
+        public TTSData(ConnectionProtocol ttsConnectionProtocol, int audioChannels, int audioFrequency, int audioSampleBits, string path)
         {
-            TtsConnectionProtocol = ttsConnectionProtocol;
+            ConnectionProtocol = ttsConnectionProtocol;
             AudioChannels = audioChannels;
             AudioFrequency = audioFrequency;
             AudioSampleBits = audioSampleBits;

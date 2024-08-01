@@ -23,15 +23,15 @@ namespace Virbe.Core
         bool ICommunicationHandler.Initialized => _initialized;
         private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(TTSCommunicationHandler));
 
-        private readonly IApiBeingConfig _config;
+        private readonly TTSData _data;
         private readonly string _endpoint;
         private RequestActionType _definedActions = RequestActionType.ProcessTTS;
         private bool _initialized;
 
-        internal TTSCommunicationHandler(IApiBeingConfig config)
+        internal TTSCommunicationHandler(string baseUrl, TTSData data)
         {
-            _config = config;
-            _endpoint = config.BaseUrl;
+            _data = data;
+            _endpoint = baseUrl;
         }
 
         void IDisposable.Dispose()
@@ -73,7 +73,7 @@ namespace Virbe.Core
 
         private async Task<TTSResponseModel> ProcessText(string text)
         {
-            return await Request<TTSResponseModel>($"{_endpoint}{_config.TTSData.Path}", HttpMethod.Post, new Dictionary<string, string>(), true, $"{{ \"text\" : \"{text}\" }}");
+            return await Request<TTSResponseModel>($"{_endpoint}{_data.Path}", HttpMethod.Post, new Dictionary<string, string>(), true, $"{{ \"text\" : \"{text}\" }}");
         }
 
         private async Task<T> Request<T>(string endpoint, HttpMethod method, Dictionary<string, string> headers, bool ensureSuccess,
