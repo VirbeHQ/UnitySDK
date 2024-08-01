@@ -34,8 +34,8 @@ namespace Virbe.Core.Actions
         public float GetAudioLength(IApiBeingConfig beingConfig)
         {
             return speech?.Length > 0
-                ? ((float)speech.Length) / beingConfig.TTSData.AudioChannels / (beingConfig.TTSData.AudioSampleBits / 8f) /
-                  beingConfig.TTSData.AudioFrequency
+                ? ((float)speech.Length) / beingConfig.FallbackTTSData.AudioChannels / (beingConfig.FallbackTTSData.AudioSampleBits / 8f) /
+                  beingConfig.FallbackTTSData.AudioFrequency
                 : 0;
         }
 

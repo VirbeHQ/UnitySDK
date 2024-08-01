@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using Plugins.Virbe.Core.Api;
 using Newtonsoft.Json;
+using System.Linq;
 
 namespace Virbe.Core
 {
@@ -10,418 +11,175 @@ namespace Virbe.Core
     {
         [JsonProperty("schema")]
         public string Schema { get; set; }
+
         [JsonProperty("baseUrl")]
         public string BaseUrl { get; set; }
-        [JsonProperty("conversation")]
-        public AiEngine Conversation { get; set; }
+
         [JsonProperty("location")]
         public Location Location { get; set; }
-        [JsonProperty("stt")]
-        public STT Stt { get; set; }
-        [JsonProperty("tts")]
-        public TTS Tts { get; set; }
-        [JsonProperty("configuration")]
-        public Configuration Configuration { get; set; }
+
+        [JsonProperty("engines")]
+        public Engines Engines { get; set; }
 
         string IApiBeingConfig.BaseUrl => BaseUrl;
 
-        EngineType IApiBeingConfig.EngineType => Conversation?.Engine switch
+        EngineType IApiBeingConfig.ConversationEngine => GetEngineType(Engines.Conversation);
+
+        TTSData IApiBeingConfig.FallbackTTSData => _ttsData;
+        private TTSData _ttsData;
+
+        STTData IApiBeingConfig.FallbackSTTData => _sttData;
+        private STTData _sttData;
+
+        List<ConversationData> IApiBeingConfig.ConversationData => _conversationData;
+        private List<ConversationData> _conversationData = new List<ConversationData>();
+        bool IApiBeingConfig.HasRoom => _hasRoom;
+        private bool _hasRoom;
+
+        internal void Initialize()
+        {
+            _hasRoom = false;
+            foreach (var convHandler in Engines?.Conversation?.ConnectionHandlers ?? new List<ConnectionHandler>())
+            {
+                ConversationData handler = null;
+                var payloads = GetPayloads(convHandler);
+                if (payloads.Contains(SupportedPayload.RoomMessage))
+                {
+                    handler = new RoomData(convHandler.ApiAccessKey, convHandler.Url, payloads, GetProtocol(convHandler), Location.Id);
+                    _hasRoom = true;
+                }
+                else
+                {
+                    handler = new ConversationData(convHandler.ApiAccessKey, GetPayloads(convHandler), GetProtocol(convHandler));
+                }
+                _conversationData.Add(handler);
+            }
+
+            if (Engines?.Stt != null)
+            {
+                var connectionHandler = Engines.Stt.ConnectionHandlers.FirstOrDefault();
+                if (connectionHandler != null)
+                {
+                    _sttData = new STTData(GetProtocol(connectionHandler), connectionHandler.Path);
+                }
+            }
+
+            if (Engines?.Tts != null)
+            {
+                var mainAudioParameters = Engines.Tts.SupportedAudioParameters.FirstOrDefault();
+                var connectionHandler = Engines.Tts.ConnectionHandlers.FirstOrDefault();
+                if (mainAudioParameters != null && connectionHandler != null)
+                {
+                    _ttsData = new TTSData(GetProtocol(connectionHandler), mainAudioParameters.Channels, mainAudioParameters.Frequency, mainAudioParameters.SampleBits, connectionHandler.Path);
+                }
+            }
+        }
+        private List<SupportedPayload> GetPayloads(ConnectionHandler connectionHandler)
+        {
+            var result = new List<SupportedPayload>();
+            foreach(var payload in connectionHandler.SupportedPayloads)
+            {
+                result.Add(GetPayloadType(payload));
+            }
+            return result;
+        }
+        private SupportedPayload GetPayloadType(string value) => value switch
+        {
+            "room-message" => SupportedPayload.RoomMessage,
+            "conversation-message" => SupportedPayload.ConversationMessage,
+            "speech-stream" => SupportedPayload.SpeechStream,
+
+            _ => throw new ArgumentOutOfRangeException(nameof(SupportedPayload), value, null)
+        };
+
+        private ConnectionProtocol GetProtocol(ConnectionHandler handler) => handler.Protocol switch
+        {
+            "local" => ConnectionProtocol.local,
+            "http" => ConnectionProtocol.http,
+            "ws" => ConnectionProtocol.ws,
+            "socket-io" => ConnectionProtocol.socket_io,
+            "ws-endless" => ConnectionProtocol.wsEndless,
+            _ => throw new ArgumentOutOfRangeException(nameof(ConnectionProtocol), handler.Protocol, null)
+        };
+        private EngineType GetEngineType(Engine engine) => engine?.EngineType switch
         {
             "room" => EngineType.Room,
             "virbe-ai" => EngineType.VirbeAi,
+            "azure-cognitive" => EngineType.AzureCognitive,
             _ => throw new NotImplementedException()
         };
-        TTSData IApiBeingConfig.TTSData
-        {
-            get
-            {
-                if (_ttsData == null && Tts != null)
-                {
-                    _ttsData = new TTSData(TTSProtocol, Tts.AudioChannels, Tts.AudioFrequency, Tts.AudioSampleBits, Tts.Path);
-                }
-                return _ttsData;
-            }
-        }
-        private TTSData _ttsData;
-
-        RoomData IApiBeingConfig.RoomData
-        {
-            get
-            {
-                if(_roomData == null && Conversation?.Room != null)
-                {
-                    _roomData = new RoomData(Conversation?.Room?.RoomApiAccessKey, Conversation?.Room?.RoomUrl, Conversation?.Room?.Enabled ?? false);
-                }
-                return _roomData;
-            }
-        }
-        private RoomData _roomData;
-
-        bool IApiBeingConfig.HasRoom => Conversation?.Room != null;
-        string IApiBeingConfig.SttPath => Stt.Path;
-        SttConnectionProtocol IApiBeingConfig.SttProtocol => Stt.Protocol switch
-        {
-            "local" => SttConnectionProtocol.local,
-            "http" => SttConnectionProtocol.http,
-            "sse" => SttConnectionProtocol.sse,
-            "ws" => SttConnectionProtocol.ws,
-            "socket-io" => SttConnectionProtocol.socket_io,
-
-            _ => throw new ArgumentOutOfRangeException(nameof(SttConnectionProtocol), Stt.Protocol, null)
-        };
-        private TtsConnectionProtocol TTSProtocol => Tts.Protocol switch
-        {
-            "http" => TtsConnectionProtocol.http,
-            "room" => TtsConnectionProtocol.room,
-            _ => throw new ArgumentOutOfRangeException(nameof(TtsConnectionProtocol), Tts.Protocol, null)
-        };
-
-
-        RoomApiService IApiBeingConfig.CreateRoomObject(string endUserId) 
-            => new RoomApiService(Conversation?.Room?.RoomUrl, 
-                Conversation?.Room?.RoomApiAccessKey,
-                Location.Id,
-                endUserId);
-    }
-    public class AiEngine
-    {
-        [JsonProperty("engine")]
-        internal string Engine { get; set; }
-
-        [JsonProperty("room")]
-        public Room Room { get; set; }
     }
 
-    public class Room
-    {
-        [JsonProperty("enabled")]
-        internal bool Enabled { get; set; }
-
-        [JsonProperty("roomUrl")]
-        internal string RoomUrl { get; set; }
-
-        [JsonProperty("roomApiAccessKey")]
-        internal string RoomApiAccessKey { get; set; }
-
-        [JsonProperty("protocol")]
-        internal string Protocol { get; set; }
-
-        [JsonProperty("path")]
-        internal string Path { get; set; }
-    }
 
     public class Location
     {
         [JsonProperty("id")]
-        internal string Id { get; set; }
+        public string Id { get; set; }
 
         [JsonProperty("name")]
-        internal string Name { get; set; }
-
-        [JsonProperty("predefined")]
-        internal bool Predefined { get; set; }
-
-        [JsonProperty("pingMonitoring")]
-        internal bool PingMonitoring { get; set; }
+        public string Name { get; set; }
 
         [JsonProperty("channel")]
-        internal string Channel { get; set; }
-
-        [JsonProperty("createdAt")]
-        internal DateTime CreatedAt { get; set; }
-
-        [JsonProperty("createdBy")]
-        internal object CreatedBy { get; set; }
-
-        [JsonProperty("modifiedAt")]
-        internal DateTime ModifiedAt { get; set; }
-
-        [JsonProperty("modifiedBy")]
-        internal object ModifiedBy { get; set; }
-
-        [JsonProperty("archivedAt")]
-        internal object ArchivedAt { get; set; }
+        public string Channel { get; set; }
     }
 
-    public class STT
+    public class Engines
+    {
+        [JsonProperty("conversation")]
+        public Engine Conversation { get; set; }
+
+        [JsonProperty("stt")]
+        public Engine Stt { get; set; }
+
+        [JsonProperty("tts")]
+        public Engine Tts { get; set; }
+    }
+
+    public class Engine
     {
         [JsonProperty("engine")]
-        internal string Engine { get; set; }
+        public string EngineType { get; set; }
 
-        [JsonProperty("recordingChannels")]
-        internal int RecordingChannels { get; set; }
+        [JsonProperty("connectionHandlers")]
+        public List<ConnectionHandler> ConnectionHandlers { get; set; }
 
-        [JsonProperty("recordingFrequency")]
-        internal int RecordingFrequency { get; set; }
+        [JsonProperty("supportedAudioParameters")]
+        public List<AudioParameters> SupportedAudioParameters { get; set; }
+    }
+
+    public class ConnectionHandler
+    {
+        [JsonProperty("path")]
+        public string Path { get; set; }
+
+        [JsonProperty("url")]
+        public string Url { get; set; }
+
+        [JsonProperty("apiAccessKey")]
+        public string ApiAccessKey { get; set; }
 
         [JsonProperty("protocol")]
-        internal string Protocol { get; set; }
+        public string Protocol { get; set; }
 
-        [JsonProperty("path")]
-        internal string Path { get; set; }
+        [JsonProperty("schemaVersion")]
+        public string SchemaVersion { get; set; }
+
+        [JsonProperty("supportedPayloads")]
+        public List<string> SupportedPayloads { get; set; }
     }
 
-    public class TTS
+    public class AudioParameters
     {
-        [JsonProperty("engine")]
-        internal string Engine { get; set; }
+        [JsonProperty("channels")]
+        public int Channels { get; set; }
 
-        [JsonProperty("audioChannels")]
-        internal int AudioChannels { get; set; }
+        [JsonProperty("frequency")]
+        public int Frequency { get; set; }
 
-        [JsonProperty("audioFrequency")]
-        internal int AudioFrequency { get; set; }
+        [JsonProperty("sampleBits")]
+        public int SampleBits { get; set; }
 
-        [JsonProperty("audioSampleBits")]
-        internal int AudioSampleBits { get; set; }
-
-        [JsonProperty("audioType")]
-        internal string AudioType { get; set; }
-
-        [JsonProperty("protocol")]
-        internal string Protocol { get; set; }
-
-        [JsonProperty("path")]
-        internal string Path { get; set; }
-    }
-
-    public class Configuration
-    {
-        [JsonProperty("host")]
-        internal Host Host { get; set; }
-
-        [JsonProperty("environment")]
-        internal Environment Environment { get; set; }
-
-        [JsonProperty("configuration")]
-        internal Config Config { get; set; }
-    }
-
-    public class Host
-    {
-        [JsonProperty("type")]
-        internal string Type { get; set; }
-
-        [JsonProperty("collapsedThumbnailFile")]
-        internal string CollapsedThumbnailFile { get; set; }
-
-        [JsonProperty("sceneLoadingPlaceholderFile")]
-        internal string SceneLoadingPlaceholderFile { get; set; }
-
-        [JsonProperty("backgroundGradient")]
-        internal BackgroundGradient BackgroundGradient { get; set; }
-
-        [JsonProperty("camera")]
-        internal Camera Camera { get; set; }
-
-        [JsonProperty("character")]
-        internal Character Character { get; set; }
-
-        [JsonProperty("animations")]
-        internal Animations Animations { get; set; }
-
-        [JsonProperty("joints")]
-        internal Joints Joints { get; set; }
-    }
-
-    public class BackgroundGradient
-    {
-        [JsonProperty("color1Hex")]
-        internal string Color1Hex { get; set; }
-
-        [JsonProperty("color2Hex")]
-        internal string Color2Hex { get; set; }
-    }
-
-    public class Camera
-    {
-        [JsonProperty("fullShot")]
-        internal CameraPosition FullShot { get; set; }
-
-        [JsonProperty("mediumCloseup")]
-        internal CameraPosition MediumCloseup { get; set; }
-    }
-
-    public class CameraPosition
-    {
-        [JsonProperty("positionXyzFloat")]
-        internal float[] PositionXyzFloat { get; set; }
-
-        [JsonProperty("targetXyzFloat")]
-        internal float[] TargetXyzFloat { get; set; }
-    }
-
-    public class Character
-    {
-        [JsonProperty("mainFile")]
-        internal string MainFile { get; set; }
-    }
-
-    public class Animations
-    {
-        [JsonProperty("basePath")]
-        internal string BasePath { get; set; }
-
-        [JsonProperty("animationFiles")]
-        internal Dictionary<string, AnimationFile> AnimationFiles { get; set; }
-
-        [JsonProperty("gestureConfigFile")]
-        internal string GestureConfigFile { get; set; }
-
-        [JsonProperty("poiConfigFile")]
-        internal string PoiConfigFile { get; set; }
-    }
-
-    public class AnimationFile
-    {
-        [JsonProperty("file")]
-        internal string File { get; set; }
-
-        [JsonProperty("clipsFrom")]
-        internal float? ClipsFrom { get; set; }
-
-        [JsonProperty("clipsTo")]
-        internal float? ClipsTo { get; set; }
-    }
-
-    public class Joints
-    {
-        [JsonProperty("lookTracker")]
-        internal string LookTracker { get; set; }
-
-        [JsonProperty("audioAttach")]
-        internal string AudioAttach { get; set; }
-    }
-
-    public class Environment
-    {
-        [JsonProperty("cameraExposure")]
-        internal int CameraExposure { get; set; }
-
-        [JsonProperty("clearColorRgba255")]
-        internal ClearColorRgba255 ClearColorRgba255 { get; set; }
-
-        [JsonProperty("enableSkybox")]
-        internal bool EnableSkybox { get; set; }
-
-        [JsonProperty("skybox")]
-        internal Skybox Skybox { get; set; }
-
-        [JsonProperty("ground")]
-        internal Ground Ground { get; set; }
-
-        [JsonProperty("lights")]
-        internal Lights Lights { get; set; }
-    }
-
-    public class ClearColorRgba255
-    {
-        [JsonProperty("r")]
-        internal int R { get; set; }
-
-        [JsonProperty("g")]
-        internal int G { get; set; }
-
-        [JsonProperty("b")]
-        internal int B { get; set; }
-
-        [JsonProperty("a")]
-        internal float A { get; set; }
-    }
-
-    public class Skybox
-    {
-        [JsonProperty("intensity")]
-        internal int Intensity { get; set; }
-
-        [JsonProperty("colorRgb255")]
-        internal ColorRgb255 ColorRgb255 { get; set; }
-
-        [JsonProperty("textureFile")]
-        internal string TextureFile { get; set; }
-    }
-
-    public class ColorRgb255
-    {
-        [JsonProperty("r")]
-        internal int R { get; set; }
-
-        [JsonProperty("g")]
-        internal int G { get; set; }
-
-        [JsonProperty("b")]
-        internal int B { get; set; }
-    }
-
-    public class Ground
-    {
-        [JsonProperty("colorRgb255")]
-        internal ColorRgb255 ColorRgb255 { get; set; }
-    }
-
-    public class Lights
-    {
-        [JsonProperty("ambient")]
-        internal Light Ambient { get; set; }
-
-        [JsonProperty("directional")]
-        internal Light Directional { get; set; }
-    }
-
-    public class Light
-    {
-        [JsonProperty("intensity")]
-        internal int Intensity { get; set; }
-
-        [JsonProperty("colorRgb255")]
-        internal ClearColorRgba255 ColorRgb255 { get; set; }
-    }
-
-    public class Config
-    {
-        [JsonProperty("whiteLabel")]
-        internal bool WhiteLabel { get; set; }
-
-        [JsonProperty("being")]
-        internal Being Being { get; set; }
-
-        [JsonProperty("gdpr")]
-        internal Gdpr Gdpr { get; set; }
-
-        [JsonProperty("teaser")]
-        internal string Teaser { get; set; }
-
-        [JsonProperty("showSubtitles")]
-        internal bool ShowSubtitles { get; set; }
-
-        [JsonProperty("hideHistoryOnLoad")]
-        internal bool HideHistoryOnLoad { get; set; }
-    }
-
-    public class Being
-    {
-        [JsonProperty("name")]
-        public string Name { get; internal set; }
-    }
-
-    public class Gdpr
-    {
-        [JsonProperty("explicitConsentRequired")]
-        internal bool ExplicitConsentRequired { get; set; }
-
-        [JsonProperty("consentText")]
-        internal string ConsentText { get; set; }
-
-        [JsonProperty("consentButtonText")]
-        internal string ConsentButtonText { get; set; }
-
-        [JsonProperty("declineButtonText")]
-        internal string DeclineButtonText { get; set; }
-
-        [JsonProperty("declineConsentNotice")]
-        internal string DeclineConsentNotice { get; set; }
-
-        [JsonProperty("learnMoreUrl")]
-        internal string LearnMoreUrl { get; set; }
+        [JsonProperty("format")]
+        public string Format { get; set; }
     }
 }
