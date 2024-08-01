@@ -31,28 +31,58 @@ namespace Virbe.Core
             _callActionToken.UserActionFired += (args) => UserActionFired?.Invoke(args);
             _callActionToken.BeingActionFired += (args) => BeingActionFired?.Invoke(args);
 
-            if (_apiBeingConfig.HasRoom && _apiBeingConfig.EngineType == EngineType.Room)
+            var haveRoom = false;
+            var supportedPayloads = new List<SupportedPayload>();
+            foreach (var handler in _apiBeingConfig.ConversationData)
             {
-                var roomSendingAudio = _apiBeingConfig.SttProtocol == SttConnectionProtocol.http;
-                var roomHandler = new RoomCommunicationHandler(_apiBeingConfig, _callActionToken, roomSendingAudio, 500);
-                _being.ConversationStarted += roomHandler.StartCommunication;
-                _being.ConversationEnded += roomHandler.EndCommunication;
-                roomHandler.RequestTTSProcessing += (text, callback) => ProcessTTS( text, callback).Forget();
+                if(handler.ConnectionProtocol == ConnectionProtocol.http)
+                {
+                    var roomData = handler as RoomData;
+                    var roomHandler = new RoomCommunicationHandler(roomData, _callActionToken, 500);
+                    _being.ConversationStarted += roomHandler.StartCommunication;
+                    _being.ConversationEnded += roomHandler.EndCommunication;
+                    roomHandler.RequestTTSProcessing += (text, callback) => ProcessTTS(text, callback).Forget();
 
-                _handlers.Add(roomHandler);
+                    _handlers.Add(roomHandler);
+                    haveRoom = true;
+                }
+                else if(handler.ConnectionProtocol == ConnectionProtocol.wsEndless)
+                {
+                   //TODO: implement endless socket-io handler
+                }
+                supportedPayloads.AddRange(handler.SupportedPayloads);
             }
-            if (_apiBeingConfig.SttProtocol == SttConnectionProtocol.socket_io)
+
+            if(_apiBeingConfig.ConversationEngine == EngineType.Room && !haveRoom)
             {
-                var socketHandler = new STTSocketCommunicationHandler(_apiBeingConfig);
-                _being.UserStartSpeaking += socketHandler.OpenSocket;
-                _being.UserStopSpeaking += socketHandler.CloseSocket;
-                socketHandler.RequestTextSend += (text) => SendText( text).Forget(); 
-                _handlers.Add(socketHandler);
+                _logger.LogError($"Engine is set to room but no room provided. Could not initialize");
+                return;
             }
-            if(_apiBeingConfig.TTSData.TtsConnectionProtocol == TtsConnectionProtocol.http)
+
+            if (!supportedPayloads.Contains(SupportedPayload.SpeechStream) )
             {
-                var ttsRestHandler = new TTSCommunicationHandler(_apiBeingConfig);
-                _handlers.Add(ttsRestHandler);
+                if(_apiBeingConfig.FallbackSTTData.ConnectionProtocol == ConnectionProtocol.socket_io)
+                {
+                    var socketHandler = new STTSocketCommunicationHandler(_apiBeingConfig.BaseUrl, _apiBeingConfig.FallbackSTTData);
+                    _being.UserStartSpeaking += socketHandler.OpenSocket;
+                    _being.UserStopSpeaking += socketHandler.CloseSocket;
+                    socketHandler.RequestTextSend += (text) => SendText(text).Forget();
+                    _handlers.Add(socketHandler);
+                }
+                else
+                {
+                    throw new NotImplementedException();
+                }
+
+                if (_apiBeingConfig.FallbackTTSData.ConnectionProtocol == ConnectionProtocol.http)
+                {
+                    var ttsRestHandler = new TTSCommunicationHandler(_apiBeingConfig.BaseUrl, _apiBeingConfig.FallbackTTSData);
+                    _handlers.Add(ttsRestHandler);
+                }
+                else
+                {
+                    throw new NotImplementedException();
+                }
             }
         }
 
