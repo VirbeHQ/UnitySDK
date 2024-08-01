@@ -1,0 +1,87 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &5778705915224219038
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 5778705915224219033}
+  - component: {fileID: 5778705915224219037}
+  - component: {fileID: 5778705915224219036}
+  - component: {fileID: 5778705915224219039}
+  m_Layer: 0
+  m_Name: VoiceRecorder
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &5778705915224219033
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5778705915224219038}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 0
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &5778705915224219037
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5778705915224219038}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0458b783f33a14fd1aba532e6d53510d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  PreferredDeviceName: 
+--- !u!114 &5778705915224219036
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5778705915224219038}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 03e9b9f959d38471a8923229e038ce0d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _virbeBeing: {fileID: 0}
+  keepConstantRecording: 1
+  maxRecordingTime: 15
+  keepRecordingAfterStopTime: 0.5
+  minRecordingSampleTime: 0.8
+  userSpeechAudioSource: {fileID: 0}
+--- !u!114 &5778705915224219039
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5778705915224219038}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2aded4690f0eb704993468a2976f99fc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  disableWhenBeingIsSpeaking: 1
+  _being: {fileID: 0}
+  _speakToBackgroundDiff: 2.7
+  _talkingPauseTimeToStop: 0.75
+  _talkingBeginOffsetTime: 0.2
+  _minRmsTreshold: 0.02
+  _rmsWindowTimeSize: 3
+  _pitchTreshold: 80
