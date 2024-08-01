@@ -24,18 +24,19 @@ namespace Virbe.Core
 
         private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(RoomCommunicationHandler));
         private readonly int _poolingInterval;
-        private readonly IApiBeingConfig _config;
 
         private RoomApiService _roomApiService;
         private CancellationTokenSource _pollingMessagesCancelletion;
         private VirbeBeing _being;
         private ActionToken _callActionToken;
+        private RoomData _roomData;
 
-        internal RoomCommunicationHandler(IApiBeingConfig config, CommunicationSystem.ActionToken actionToken, bool sendingAudio, int interval = 500)
+        internal RoomCommunicationHandler(RoomData data, ActionToken actionToken,int interval = 500)
         {
             _poolingInterval = interval;
-            _config = config;
+            _roomData = data;
             _callActionToken = actionToken;
+            var sendingAudio = data.SupportedPayloads.Contains(SupportedPayload.SpeechStream);
             if (!sendingAudio)
             {
                 _definedActions = RequestActionType.SendText | RequestActionType.SendNamedAction;
@@ -48,7 +49,7 @@ namespace Virbe.Core
         {
             EndCommunication();
             _currentUserSession = session;
-            _roomApiService = _config.CreateRoomObject(_currentUserSession.UserId);
+            _roomApiService = _roomData.CreateRoomObject(_currentUserSession.UserId);
 
             if (string.IsNullOrEmpty(_currentUserSession.ConversationId))
             {
@@ -90,10 +91,6 @@ namespace Virbe.Core
 
         private async Task SendSpeech(byte[] recordedAudioBytes) 
         {
-            if (!_config.RoomData.Enabled)
-            {
-                return;
-            }
             var sendTask = _roomApiService.SendSpeech(recordedAudioBytes);
             await sendTask;
 
@@ -195,7 +192,7 @@ namespace Virbe.Core
                         {
                             try
                             {
-                                if (_config.TTSData.TtsConnectionProtocol == TtsConnectionProtocol.room)
+                                if (_roomData.SupportedPayloads.Contains(SupportedPayload.SpeechStream))
                                 {
                                     var voiceResult = await _roomApiService.GetRoomMessageVoiceData(message);
                                     ProcessResponse(message, voiceResult);
