@@ -104,9 +104,9 @@ namespace Virbe.Core.Actions
         {
             if (outputAudioSource && audioBytes.Length > 0)
             {
-                var audioClip = AudioClip.Create("clip", audioBytes.Length, beingConfig.TTSData.AudioChannels,
-                    beingConfig.TTSData.AudioFrequency, false, null);
-                audioClip.SetData(AudioConverter.PCMBytesToFloats(audioBytes, beingConfig.TTSData.AudioSampleBits), 0);
+                var audioClip = AudioClip.Create("clip", audioBytes.Length, beingConfig.FallbackTTSData.AudioChannels,
+                    beingConfig.FallbackTTSData.AudioFrequency, false, null);
+                audioClip.SetData(AudioConverter.PCMBytesToFloats(audioBytes, beingConfig.FallbackTTSData.AudioSampleBits), 0);
 
                 outputAudioSource.Stop();
                 outputAudioSource.clip = audioClip;

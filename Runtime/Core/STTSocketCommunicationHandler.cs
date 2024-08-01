@@ -27,12 +27,14 @@ namespace Virbe.Core
 
         private CancellationTokenSource _sttSocketTokenSource;
         private CancellationTokenSource _audioSocketSenderTokenSource;
-        private IApiBeingConfig _apiBeingConfig;
+        private STTData _data;
+        private string _baseUrl;
         private VirbeBeing _being;
 
-        internal STTSocketCommunicationHandler(IApiBeingConfig config)
+        internal STTSocketCommunicationHandler(string baseUrl, STTData data)
         {
-            _apiBeingConfig = config;
+            _baseUrl = baseUrl;
+            _data = data;
         }
 
         bool ICommunicationHandler.HasCapability(RequestActionType type)
@@ -62,10 +64,6 @@ namespace Virbe.Core
 
         private void SendSpeech(byte[] recordedAudioBytes)
         {
-            if (!_apiBeingConfig.RoomData.Enabled)
-            {
-                return;
-            }
             if (_socketSttClient == null)
             {
                 _logger.LogError($"[VIRBE] Socket not created, could not send speech chunk");
@@ -107,9 +105,9 @@ namespace Virbe.Core
         {
             _sttSocketTokenSource?.Cancel();
             _sttSocketTokenSource = new CancellationTokenSource();
-            _socketSttClient = new SocketIOClient.SocketIO(_apiBeingConfig.BaseUrl);
+            _socketSttClient = new SocketIOClient.SocketIO(_baseUrl);
             _socketSttClient.Options.EIO = SocketIO.Core.EngineIO.V4;
-            _socketSttClient.Options.Path = _apiBeingConfig.SttPath;
+            _socketSttClient.Options.Path = _data.Path;
             _currentSttResult.Clear();
 
             _logger.Log($"Try connecting to socket.io endpoint");
