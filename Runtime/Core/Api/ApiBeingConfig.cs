@@ -1,6 +1,7 @@
 using Newtonsoft.Json;
 using Plugins.Virbe.Core.Api;
 using System;
+using System.Collections.Generic;
 
 namespace Virbe.Core
 {
@@ -20,49 +21,42 @@ namespace Virbe.Core
             ttsConfig = new TtsConfig();
             host = new HostConfig();
         }
-
-        public string HostDomain => !string.IsNullOrEmpty(room?.roomUrl) ? new Uri(room?.roomUrl).GetLeftPart(UriPartial.Authority) : null;
-        string IApiBeingConfig.BaseUrl => HostDomain;
+        string IApiBeingConfig.BaseUrl => !string.IsNullOrEmpty(room?.roomUrl) ? new Uri(room?.roomUrl).GetLeftPart(UriPartial.Authority) : null;
         bool IApiBeingConfig.HasRoom => room != null;
-        string IApiBeingConfig.SttPath => string.Empty;
-        SttConnectionProtocol IApiBeingConfig.SttProtocol => SttConnectionProtocol.http;
-        EngineType IApiBeingConfig.EngineType => EngineType.Room;
+        EngineType IApiBeingConfig.ConversationEngine => EngineType.Room;
 
-        RoomData IApiBeingConfig.RoomData
-        {
-            get
-            {
-                if (_roomData == null && room != null)
-                {
-                    _roomData = new RoomData(room?.roomApiAccessKey, room?.roomUrl, room?.enabled ?? false);
-                }
-                return _roomData;
-            }
-        }
-        private RoomData _roomData;
-
-        TTSData IApiBeingConfig.TTSData
-        {
-            get
-            {
-                if (_ttsData == null && ttsConfig != null)
-                {
-                    _ttsData = new TTSData(TtsConnectionProtocol.room, ttsConfig.audioChannels, ttsConfig.audioFrequency, ttsConfig.audioSampleBits, string.Empty);
-                }
-                return _ttsData;
-            }
-        }
+        TTSData IApiBeingConfig.FallbackTTSData => _ttsData;
         private TTSData _ttsData;
-        public bool HasValidHostDomain()
-        {
-            return !string.IsNullOrEmpty(HostDomain);
-        }
 
-        public bool HasValidApiAccessKey()
+        STTData IApiBeingConfig.FallbackSTTData => _sttData;
+        private STTData _sttData;
+
+        List<ConversationData> IApiBeingConfig.ConversationData => _conversationData;
+        private List<ConversationData> _conversationData = new List<ConversationData>();
+
+        internal void Initialize()
         {
-            return !string.IsNullOrEmpty(room?.roomApiAccessKey);
+            if (room != null)
+            {
+                var supportedPayloads = new List<SupportedPayload>()
+                    {
+                        SupportedPayload.RoomMessage,
+                        SupportedPayload.SpeechStream,
+                    };
+                var roomHandler = new RoomData(room?.roomApiAccessKey, room?.roomUrl, supportedPayloads, ConnectionProtocol.http, location.id);
+                _conversationData.Add(roomHandler);
+            }
+
+            if (sttConfig != null)
+            {
+                _sttData = new STTData(ConnectionProtocol.http, string.Empty);
+            }
+
+            if (ttsConfig != null)
+            {
+                _ttsData = new TTSData(ConnectionProtocol.http, ttsConfig.audioChannels, ttsConfig.audioFrequency, ttsConfig.audioSampleBits, string.Empty);
+            }
         }
-        RoomApiService IApiBeingConfig.CreateRoomObject(string endUserId) => new RoomApiService(room.roomUrl, room.roomApiAccessKey, location.id, endUserId);
 
         [Serializable]
         public class PresenterConfig

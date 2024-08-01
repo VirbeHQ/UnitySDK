@@ -243,7 +243,7 @@ namespace Virbe.Core
                 return;
             }
 
-            if (ApiBeingConfig.RoomData.Enabled)
+            if (ApiBeingConfig.HasRoom)
             {
                 _communicationSystem.SendNamedAction(name, value).Forget();
             }
@@ -256,7 +256,7 @@ namespace Virbe.Core
 
         public void SendText(string capturedUtterance)
         {
-            if (ApiBeingConfig.RoomData.Enabled)
+            if (ApiBeingConfig.HasRoom)
             {
                 _communicationSystem.SendText(capturedUtterance).Forget();
             }
