@@ -18,12 +18,16 @@ namespace Virbe.Core
                 }
                 if (result == SchemaVersion.v3)
                 {
-                    return JsonConvert.DeserializeObject<ApiBeingConfigv3>(configJson);
+                    var v3Config = JsonConvert.DeserializeObject<ApiBeingConfigv3>(configJson);
+                    v3Config.Initialize();
+                    return v3Config;
                 }
             }
             else
             {
-                return JsonConvert.DeserializeObject<ApiBeingConfig>(configJson);
+                var oldConfig = JsonConvert.DeserializeObject<ApiBeingConfig>(configJson);
+                oldConfig.Initialize();
+                return oldConfig;
             }
             throw new Exception("[VIRBE] Could not parse json to config");
         }
