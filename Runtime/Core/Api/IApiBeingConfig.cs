@@ -1,19 +1,17 @@
 ﻿using Plugins.Virbe.Core.Api;
+using System.Collections.Generic;
 
 namespace Virbe.Core
 {
     public interface IApiBeingConfig
     {
         string BaseUrl { get; }
-        EngineType EngineType { get; }
+        EngineType ConversationEngine { get; }
+        List<ConversationData> ConversationData { get; }
+
         bool HasRoom { get; }
-        RoomData RoomData { get; }
-        TTSData TTSData { get; }
 
-        //stt
-        SttConnectionProtocol SttProtocol { get; }
-        string SttPath { get; }
-
-        RoomApiService CreateRoomObject(string endUserId);
+        TTSData FallbackTTSData { get; }
+        STTData FallbackSTTData { get; }
     }
 }
