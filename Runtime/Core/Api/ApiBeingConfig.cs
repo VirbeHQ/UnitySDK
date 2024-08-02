@@ -43,7 +43,7 @@ namespace Virbe.Core
                         SupportedPayload.RoomMessage,
                         SupportedPayload.SpeechStream,
                     };
-                var roomHandler = new RoomData(room?.roomApiAccessKey, room?.roomUrl, supportedPayloads, ConnectionProtocol.http, location.id);
+                var roomHandler = new RoomData(room?.roomApiAccessKey, room?.roomUrl, supportedPayloads, ConnectionProtocol.http, location.id, room?.roomUrl);
                 _conversationData.Add(roomHandler);
             }
 

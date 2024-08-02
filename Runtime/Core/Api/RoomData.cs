@@ -9,7 +9,7 @@ namespace Virbe.Core
         public string RoomUrl { get; }
         private string _locationId;
 
-        public RoomData(string roomApiAccessKey, string roomUrl, List<SupportedPayload> supportedPayloads, ConnectionProtocol connectionProtocol, string locationId) : base(roomApiAccessKey, supportedPayloads, connectionProtocol)
+        public RoomData(string roomApiAccessKey, string roomUrl, List<SupportedPayload> supportedPayloads, ConnectionProtocol connectionProtocol, string locationId, string path) : base(roomApiAccessKey, supportedPayloads, connectionProtocol, path)
         {
             RoomUrl = roomUrl;
             _locationId = locationId;
