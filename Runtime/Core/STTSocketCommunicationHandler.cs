@@ -28,8 +28,9 @@ namespace Virbe.Core
         private CancellationTokenSource _sttSocketTokenSource;
         private CancellationTokenSource _audioSocketSenderTokenSource;
         private STTData _data;
+        private Action _additionalDisposeAction;
+
         private string _baseUrl;
-        private VirbeBeing _being;
 
         internal STTSocketCommunicationHandler(string baseUrl, STTData data)
         {
@@ -61,6 +62,8 @@ namespace Virbe.Core
             _audioSocketSenderTokenSource?.Cancel();
             DisposeSocketConnection();
         }
+
+        internal void SetAdditionalDisposeAction(Action callback) => _additionalDisposeAction = callback;
 
         private void SendSpeech(byte[] recordedAudioBytes)
         {
@@ -175,9 +178,8 @@ namespace Virbe.Core
         void IDisposable.Dispose()
         {
             _initialized = false;
+            _additionalDisposeAction?.Invoke();
             CloseSocket();
-            _being.UserStartSpeaking -= OpenSocket;
-            _being.UserStopSpeaking -= CloseSocket;
         }
 
         UniTask ICommunicationHandler.MakeAction(RequestActionType type, params object[] args)
