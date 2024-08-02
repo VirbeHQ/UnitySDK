@@ -45,12 +45,12 @@ namespace Virbe.Core
                 var payloads = GetPayloads(convHandler);
                 if (payloads.Contains(SupportedPayload.RoomMessage))
                 {
-                    handler = new RoomData(convHandler.ApiAccessKey, convHandler.Url, payloads, GetProtocol(convHandler), Location.Id);
+                    handler = new RoomData(convHandler.ApiAccessKey, convHandler.Url, payloads, GetProtocol(convHandler), Location.Id, convHandler.Path);
                     _hasRoom = true;
                 }
                 else
                 {
-                    handler = new ConversationData(convHandler.ApiAccessKey, GetPayloads(convHandler), GetProtocol(convHandler));
+                    handler = new ConversationData(convHandler.ApiAccessKey, GetPayloads(convHandler), GetProtocol(convHandler), convHandler.Path);
                 }
                 _conversationData.Add(handler);
             }
