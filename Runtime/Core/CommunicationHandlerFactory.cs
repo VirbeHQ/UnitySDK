@@ -48,7 +48,8 @@ namespace Virbe.Core
                 }
                 else if(handler.ConnectionProtocol == ConnectionProtocol.wsEndless)
                 {
-                   //TODO: implement endless socket-io handler
+                  var endlessHandler = new EndlessSocketCommunicationHandler(_apiBeingConfig.BaseUrl, handler, _callActionToken);
+                    _handlers.Add(endlessHandler);
                 }
                 supportedPayloads.AddRange(handler.SupportedPayloads);
             }
@@ -66,6 +67,11 @@ namespace Virbe.Core
                     var socketHandler = new STTSocketCommunicationHandler(_apiBeingConfig.BaseUrl, _apiBeingConfig.FallbackSTTData);
                     _being.UserStartSpeaking += socketHandler.OpenSocket;
                     _being.UserStopSpeaking += socketHandler.CloseSocket;
+                    socketHandler.SetAdditionalDisposeAction(() =>
+                    {
+                        _being.UserStartSpeaking -= socketHandler.OpenSocket;
+                        _being.UserStopSpeaking -= socketHandler.CloseSocket;
+                    });
                     socketHandler.RequestTextSend += (text) => SendText(text).Forget();
                     _handlers.Add(socketHandler);
                 }
