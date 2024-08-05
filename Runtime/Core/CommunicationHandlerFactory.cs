@@ -41,6 +41,11 @@ namespace Virbe.Core
                     var roomHandler = new RoomCommunicationHandler(roomData, _callActionToken, 500);
                     _being.ConversationStarted += roomHandler.StartCommunication;
                     _being.ConversationEnded += roomHandler.EndCommunication;
+                    roomHandler.SetAdditionalDisposeAction(() =>
+                    {
+                        _being.ConversationStarted -= roomHandler.StartCommunication;
+                        _being.ConversationEnded -= roomHandler.EndCommunication;
+                    });
                     roomHandler.RequestTTSProcessing += (text, callback) => ProcessTTS(text, callback).Forget();
 
                     _handlers.Add(roomHandler);
@@ -104,6 +109,7 @@ namespace Virbe.Core
                 catch (Exception _)
                 {
                     _logger.Log($"Could not initialize {handler.GetType()}");
+                    return;
                 }
             }
             Initialized = true;
