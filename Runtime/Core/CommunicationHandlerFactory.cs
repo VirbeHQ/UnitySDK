@@ -65,7 +65,7 @@ namespace Virbe.Core
                 return;
             }
 
-            if (!supportedPayloads.Contains(SupportedPayload.SpeechStream) )
+            if (!supportedPayloads.Contains(SupportedPayload.SpeechAudio) )
             {
                 if(_apiBeingConfig.FallbackSTTData.ConnectionProtocol == ConnectionProtocol.socket_io)
                 {
@@ -84,7 +84,9 @@ namespace Virbe.Core
                 {
                     throw new NotImplementedException();
                 }
-
+            }
+            if(!supportedPayloads.Contains(SupportedPayload.SpeechRecognized))
+            {
                 if (_apiBeingConfig.FallbackTTSData.ConnectionProtocol == ConnectionProtocol.http)
                 {
                     var ttsRestHandler = new TTSCommunicationHandler(_apiBeingConfig.BaseUrl, _apiBeingConfig.FallbackTTSData);
