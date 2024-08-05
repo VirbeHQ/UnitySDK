@@ -27,9 +27,9 @@ namespace Virbe.Core
 
         private RoomApiService _roomApiService;
         private CancellationTokenSource _pollingMessagesCancelletion;
-        private VirbeBeing _being;
         private ActionToken _callActionToken;
         private RoomData _roomData;
+        private Action _additionalDisposeAction;
 
         internal RoomCommunicationHandler(RoomData data, ActionToken actionToken,int interval = 500)
         {
@@ -236,11 +236,10 @@ namespace Virbe.Core
         {
             _initialized = false;
             EndCommunication();
+            _additionalDisposeAction?.Invoke();
             _callActionToken = null;
             _currentUserSession = null;
             _roomApiService = null;
-            _being.ConversationStarted -= StartCommunication;
-            _being.ConversationEnded -= StartCommunication;
         }
 
         async UniTask ICommunicationHandler.MakeAction(RequestActionType type, params object[] args)
@@ -271,6 +270,11 @@ namespace Virbe.Core
                     _logger.Log($"Handler {nameof(RoomCommunicationHandler)} does not support action {type}");
                     break;
             }
+        }
+
+        internal void SetAdditionalDisposeAction(Action value)
+        {
+            _additionalDisposeAction = value;
         }
     }
 }
