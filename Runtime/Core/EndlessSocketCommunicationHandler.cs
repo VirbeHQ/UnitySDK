@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -29,7 +30,7 @@ namespace Virbe.Core
         private readonly RequestActionType _definedActions = RequestActionType.SendAudioStream;
 
         private bool _initialized;
-        private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(STTSocketCommunicationHandler));
+        private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(EndlessSocketCommunicationHandler));
         private SocketIOClient.SocketIO _socketClient;
         private ConcurrentQueue<byte[]> _speechBytesAwaitingSend = new ConcurrentQueue<byte[]>();
         private StringBuilder _currentSttResult = new StringBuilder();
@@ -81,7 +82,7 @@ namespace Virbe.Core
             {
                 if (_socketClient.Connected && _speechBytesAwaitingSend.TryDequeue(out var chunk))
                 {
-                    await _socketClient.EmitAsync(SpeechAudio, AudioConverter.FromBytesToBase64(chunk));
+                    await _socketClient.EmitAsync(SpeechAudio, chunk);
                 }
                 if (cancelationToken.IsCancellationRequested)
                 {
@@ -199,6 +200,11 @@ namespace Virbe.Core
             _logger.Log(msg.ToString());
         }
 
+        private async Task StopConversation()
+        {
+            await _socketClient.EmitAsync(SpeechEnd);
+        }
+
         private void SendTextFromRresult()
         {
             if (_currentSttResult.Length > 0)
@@ -213,8 +219,8 @@ namespace Virbe.Core
         {
             _endlessSocketTokenSource?.Cancel();
             var tempSocketHandle = _socketClient;
-            await Task.Delay(1500);
-            SendTextFromRresult();
+            await StopConversation();
+            await Task.Delay(250);
             await tempSocketHandle.DisconnectAsync();
             tempSocketHandle.Dispose();
             tempSocketHandle = null;
