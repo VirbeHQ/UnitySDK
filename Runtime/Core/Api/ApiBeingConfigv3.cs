@@ -87,7 +87,8 @@ namespace Virbe.Core
         {
             "room-message" => SupportedPayload.RoomMessage,
             "conversation-message" => SupportedPayload.ConversationMessage,
-            "speech-stream" => SupportedPayload.SpeechStream,
+            "speech-audio" => SupportedPayload.SpeechAudio,
+            "speech-recognized" => SupportedPayload.SpeechRecognized,
 
             _ => throw new ArgumentOutOfRangeException(nameof(SupportedPayload), value, null)
         };
