@@ -17,6 +17,9 @@ namespace Virbe.Core
         internal event Action<string> RequestTextSend;
 
         bool ICommunicationHandler.Initialized => _initialized;
+        private const string SpeechAudio = "speech-audio";
+        private const string SpeechRecognized = "speech-recognized";
+
         private readonly RequestActionType _definedActions = RequestActionType.SendAudioStream;
 
         private bool _initialized;
@@ -81,7 +84,7 @@ namespace Virbe.Core
             {
                 if (_socketSttClient.Connected && _speechBytesAwaitingSend.TryDequeue(out var chunk))
                 {
-                    await _socketSttClient.EmitAsync("audio", AudioConverter.FromBytesToBase64(chunk));
+                    await _socketSttClient.EmitAsync(SpeechAudio, chunk);
                 }
                 if (cancelationToken.IsCancellationRequested)
                 {
@@ -120,7 +123,7 @@ namespace Virbe.Core
                 _logger.Log($"Upgraded transport: ${response}");
             });
 
-            _socketSttClient.On("recognizing", (response) =>
+            _socketSttClient.On(SpeechRecognized, (response) =>
             {
                 JArray jsonArray = JArray.Parse(response.ToString());
                 string result = (string)jsonArray[0]["text"];
@@ -128,10 +131,6 @@ namespace Virbe.Core
                 _currentSttResult.Append(result);
             });
 
-            _socketSttClient.On("connect_error", (response) =>
-            {
-                _logger.LogError($"Connection error : {response}");
-            });
 
             _socketSttClient.OnConnected += (sender, args) =>
             {
