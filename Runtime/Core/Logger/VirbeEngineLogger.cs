@@ -18,15 +18,25 @@ namespace Virbe.Core.Logger
             _prefix = prefix;
         }
 
-        internal void Log(string format, params object[] args) => LogOnMainThread(LogType.Log, format, args).Forget();
-        internal void LogError(string format, params object[] args) => LogOnMainThread(LogType.Error, format, args).Forget();
-        private async UniTaskVoid LogOnMainThread(LogType logType, string format, params object[] args)
+        internal void Log(string message) => LogOnMainThread(LogType.Log, message).Forget();
+        internal void LogError(string message) => LogOnMainThread(LogType.Error, message).Forget();
+        private async UniTaskVoid LogOnMainThread(LogType logType, string message)
         {
             if (Thread.CurrentThread != _mainThread)
             {
                 await UniTask.SwitchToMainThread();
             }
-            Logger.LogFormat(logType, $"{Tag}/{_prefix}: " + format, args);
+            //do not log everything in release build
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+            if (logType == LogType.Log) 
+            {
+                Debug.Log($"{Tag}/{_prefix}: " + message);
+            }
+            else if (logType == LogType.Error) 
+            {
+                Debug.LogError($"{Tag}/{_prefix}: " + message);
+            }
+#endif
         }
     }
 }
