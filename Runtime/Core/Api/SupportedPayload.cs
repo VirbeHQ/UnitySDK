@@ -4,6 +4,7 @@
     {
         RoomMessage,
         ConversationMessage,
-        SpeechStream
+        SpeechAudio,
+        SpeechRecognized
     }
 }
