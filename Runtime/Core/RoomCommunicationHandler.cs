@@ -36,7 +36,7 @@ namespace Virbe.Core
             _poolingInterval = interval;
             _roomData = data;
             _callActionToken = actionToken;
-            var sendingAudio = data.SupportedPayloads.Contains(SupportedPayload.SpeechStream);
+            var sendingAudio = data.SupportedPayloads.Contains(SupportedPayload.SpeechAudio);
             if (!sendingAudio)
             {
                 _definedActions = RequestActionType.SendText | RequestActionType.SendNamedAction;
@@ -192,7 +192,7 @@ namespace Virbe.Core
                         {
                             try
                             {
-                                if (_roomData.SupportedPayloads.Contains(SupportedPayload.SpeechStream))
+                                if (_roomData.SupportedPayloads.Contains(SupportedPayload.SpeechAudio))
                                 {
                                     var voiceResult = await _roomApiService.GetRoomMessageVoiceData(message);
                                     ProcessResponse(message, voiceResult);
