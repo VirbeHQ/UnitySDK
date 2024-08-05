@@ -41,7 +41,7 @@ namespace Virbe.Core
                 var supportedPayloads = new List<SupportedPayload>()
                     {
                         SupportedPayload.RoomMessage,
-                        SupportedPayload.SpeechStream,
+                        SupportedPayload.SpeechAudio,
                     };
                 var roomHandler = new RoomData(room?.roomApiAccessKey, room?.roomUrl, supportedPayloads, ConnectionProtocol.http, location.id, room?.roomUrl);
                 _conversationData.Add(roomHandler);
