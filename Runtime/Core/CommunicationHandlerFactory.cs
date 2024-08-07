@@ -12,6 +12,7 @@ namespace Virbe.Core
     {
         public event Action<UserAction> UserActionFired;
         public event Action<BeingAction> BeingActionFired;
+        public event Action<string> UserSpeechRecognized;
 
         public bool Initialized { get; private set; }   
 
@@ -25,11 +26,14 @@ namespace Virbe.Core
 
         public CommunicationSystem(VirbeBeing being)
         {
+            //on demand is the fastest as for 07_08_2024
+            var connectionType = ConnectionType.OnDemand;
             _apiBeingConfig = being.ApiBeingConfig;
             _being = being;
             _callActionToken = new ActionToken();
             _callActionToken.UserActionFired += (args) => UserActionFired?.Invoke(args);
             _callActionToken.BeingActionFired += (args) => BeingActionFired?.Invoke(args);
+            _callActionToken.UserSpeechRecognized += (args) => UserSpeechRecognized?.Invoke(args);
 
             var haveRoom = false;
             var supportedPayloads = new List<SupportedPayload>();
@@ -46,16 +50,26 @@ namespace Virbe.Core
                         _being.ConversationStarted -= roomHandler.StartCommunication;
                         _being.ConversationEnded -= roomHandler.EndCommunication;
                     });
-                    roomHandler.RequestTTSProcessing += (text, callback) => ProcessTTS(text, callback).Forget();
+                    roomHandler.RequestTTSProcessing += (args) => ProcessTTS(args).Forget();
 
                     _handlers.Add(roomHandler);
                     haveRoom = true;
                 }
                 else if(handler.ConnectionProtocol == ConnectionProtocol.wsEndless)
                 {
-                  var endlessHandler = new EndlessSocketCommunicationHandler(_apiBeingConfig.BaseUrl, handler, _callActionToken);
-                    endlessHandler.RequestTTSProcessing += (text, callback) => ProcessTTS(text, callback).Forget();
-                    _handlers.Add(endlessHandler);
+                  var conversationHandler = new ConversationSocketCommunicationHandler(_apiBeingConfig.BaseUrl, handler, _callActionToken, connectionType);
+                    conversationHandler.RequestTTSProcessing += (args) => ProcessTTS(args).Forget();
+                    _handlers.Add(conversationHandler);
+                    if(connectionType == ConnectionType.OnDemand)
+                    {
+                        _being.UserStartSpeaking += conversationHandler.StartSendingSpeech;
+                        _being.UserStopSpeaking += conversationHandler.StopSendingSpeech;
+                        conversationHandler.SetAdditionalDisposeAction(() =>
+                        {
+                            _being.UserStartSpeaking -= conversationHandler.StartSendingSpeech;
+                            _being.UserStopSpeaking -= conversationHandler.StopSendingSpeech;
+                        });
+                    }
                 }
                 supportedPayloads.AddRange(handler.SupportedPayloads);
             }
@@ -152,13 +166,13 @@ namespace Virbe.Core
             }
         }
 
-        internal async UniTaskVoid ProcessTTS(string text, Action<RoomDto.BeingVoiceData> callback)
+        internal async UniTaskVoid ProcessTTS(TTSProcessingArgs args)
         {
             foreach (var handler in _handlers)
             {
                 if (handler.Initialized && handler.HasCapability(RequestActionType.ProcessTTS))
                 {
-                    await handler.MakeAction(RequestActionType.ProcessTTS, text, callback);
+                    await handler.MakeAction(RequestActionType.ProcessTTS, args.Text, args.Callback);
                     return;
                 }
             }
@@ -172,6 +186,7 @@ namespace Virbe.Core
             }
             UserActionFired = null;
             BeingActionFired = null;
+            UserSpeechRecognized = null;
             _handlers.Clear();
             Initialized = false;
         }
@@ -180,6 +195,7 @@ namespace Virbe.Core
         {
             public Action<UserAction> UserActionFired;
             public Action<BeingAction> BeingActionFired;
+            public Action<string> UserSpeechRecognized;
         }
     }
 
