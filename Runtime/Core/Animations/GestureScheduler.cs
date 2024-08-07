@@ -1,66 +1,64 @@
+using System;
 using System.Collections.Generic;
-using System.Linq;
-using RSG;
 
 namespace Virbe.Core.Gestures
 {
     internal class GestureScheduler
     {
-        internal delegate void OnGestureStartDelegate(Gesture gesture);
-        internal delegate void OnGestureEndDelegate(Gesture gesture);
+        private class GestureEntry
+        {
+            public Gesture Gesture { get; set; }
+            public float StartTime { get; set; }
+            public float EndTime { get; set; }
 
+            public bool IsRunning { get; set; }
+        }
 
-        internal OnGestureStartDelegate OnGestureStart;
-        internal OnGestureEndDelegate OnGestureEnd;
+        internal event Action<Gesture> OnGestureStart;
+        internal event Action<Gesture> OnGestureEnd;
 
-        private List<PromiseTimer> _scheduleTimers = new List<PromiseTimer>();
+        private List<GestureEntry> _scheduleGestures = new List<GestureEntry>();
+        private List<GestureEntry>  _usedGestures = new List<GestureEntry>();
 
         internal void Schedule(IEnumerable<Gesture> gestures)
         {
-            _scheduleTimers.AddRange(gestures
-                .SelectMany(gesture =>
+            foreach (Gesture gesture in gestures)
+            {
+                var gestureEntry = new GestureEntry();
+                gestureEntry.Gesture = gesture;
+                gestureEntry.StartTime = AsSeconds(gesture.StartTime);
+                gestureEntry.EndTime = AsSeconds(gesture.StartTime + gesture.Duration);
+                _scheduleGestures.Add(gestureEntry);
+            }
+        }
+
+        internal void AdvanceBy(float delaTime)
+        {
+            foreach(var entry in _scheduleGestures)
+            {
+                entry.StartTime -= delaTime;
+                entry.EndTime -= delaTime;
+                if(entry.EndTime <= 0 && entry.IsRunning)
                 {
-                    var startTimer = new PromiseTimer();
-                    startTimer
-                        .WaitFor(AsSeconds(millis: gesture.StartTime))
-                        .Then(() => { StartGesturePlay(gesture); });
-                    
-                    var stopTimer = new PromiseTimer();
-                    stopTimer
-                        .WaitFor(AsSeconds(millis: gesture.StartTime + gesture.Duration))
-                        .Then(() =>
-                        {
-                            EndGesturePlay(gesture);
-                        });
-
-                    return AsEnumerable(startTimer, stopTimer);
-                })
-                .ToList());
-        }
-
-        private void EndGesturePlay(Gesture gesture)
-        {
-            OnGestureEnd?.Invoke(gesture);
-        }
-
-        private void StartGesturePlay(Gesture gesture)
-        {
-            OnGestureStart?.Invoke(gesture);
-        }
-
-        internal void AdvanceBy(float seconds)
-        {
-            _scheduleTimers.ForEach(pt => pt.Update(seconds));
+                    OnGestureEnd?.Invoke(entry.Gesture);
+                    _usedGestures.Add(entry);
+                }
+                else if(entry.StartTime <= 0 && !entry.IsRunning)
+                {
+                    OnGestureStart?.Invoke(entry.Gesture);
+                    entry.IsRunning = true;
+                }
+            }
+            foreach (var entry in _usedGestures)
+            {
+                _scheduleGestures.Remove(entry);
+            }
+            _usedGestures.Clear();
         }
 
         private static float AsSeconds(int millis)
         {
             return (float)millis / 1000;
-        }
-        
-        private static IEnumerable<T> AsEnumerable<T>(params T[] items)
-        {
-            return items;
         }
     }
 }
