@@ -1,43 +1,60 @@
+using System;
 using System.Collections.Generic;
-using System.Linq;
-using RSG;
 
 namespace Virbe.Core.Emotions
 {
     internal class EmotionScheduler
     {
-        internal delegate void OnEmotionStartDelegate(Emotion emotion);
-
-        internal delegate void OnEmotionStopDelegate(Emotion emotion);
-
-        internal OnEmotionStartDelegate OnEmotionStart;
-        internal OnEmotionStopDelegate OnEmotionStop;
-
-        private List<PromiseTimer> _scheduleTimers = new List<PromiseTimer>();
-
-        internal void Schedule(IEnumerable<Emotion> emotions)
+        private class EmotionEntry
         {
-            _scheduleTimers = emotions
-                .SelectMany(emotion =>
-                {
-                    var startTimer = new PromiseTimer();
-                    startTimer
-                        .WaitFor(AsSeconds(millis: emotion.StartTime))
-                        .Then(() => { OnEmotionStart?.Invoke(emotion); });
+            public Emotion Emotion { get; set; }
+            public float StartTime { get; set; }
+            public float EndTime { get; set; }
 
-                    var stopTimer = new PromiseTimer();
-                    stopTimer
-                        .WaitFor(AsSeconds(millis: emotion.StartTime + emotion.Duration))
-                        .Then(() => { OnEmotionStop?.Invoke(emotion); });
-
-                    return AsEnumerable(startTimer, stopTimer);
-                })
-                .ToList();
+            public bool IsRunning { get; set; }
         }
 
-        internal void AdvanceBy(float seconds)
+        internal event Action<Emotion> OnEmotionStart;
+        internal event Action<Emotion> OnEmotionStop;
+
+        private List<EmotionEntry> _scheduleEmotions = new List<EmotionEntry>();
+        private List<EmotionEntry> _usedEmotions = new List<EmotionEntry>();
+
+
+        internal void Schedule(IEnumerable<Emotion> gestures)
         {
-            foreach (var pt in _scheduleTimers) pt.Update(seconds);
+            foreach (Emotion gesture in gestures)
+            {
+                var gestureEntry = new EmotionEntry();
+                gestureEntry.Emotion = gesture;
+                gestureEntry.StartTime = AsSeconds(gesture.StartTime);
+                gestureEntry.EndTime = AsSeconds(gesture.StartTime + gesture.Duration);
+                _scheduleEmotions.Add(gestureEntry);
+            }
+        }
+
+        internal void AdvanceBy(float delaTime)
+        {
+            foreach (var entry in _scheduleEmotions)
+            {
+                entry.StartTime -= delaTime;
+                entry.EndTime -= delaTime;
+                if (entry.EndTime <= 0 && entry.IsRunning)
+                {
+                    OnEmotionStop?.Invoke(entry.Emotion);
+                    _usedEmotions.Add(entry);
+                }
+                else if (entry.StartTime <= 0 && !entry.IsRunning)
+                {
+                    OnEmotionStart?.Invoke(entry.Emotion);
+                    entry.IsRunning = true;
+                }
+            }
+            foreach (var entry in _usedEmotions)
+            {
+                _scheduleEmotions.Remove(entry);
+            }
+            _usedEmotions.Clear();
         }
 
         private static float AsSeconds(int millis)
