@@ -53,6 +53,11 @@ namespace Virbe.Core.Actions
             SwitchAnimator(_animator);
         }
 
+        private void OnDestroy()
+        {
+            StopAllCoroutines();
+        }
+
         public void SwitchAudioSource(AudioSource audioSource)
         {
             if (outputAudioSource != null) audioSource.Stop();
