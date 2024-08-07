@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Threading;
@@ -30,6 +31,8 @@ namespace Virbe.Core
 
         private CancellationTokenSource _sttSocketTokenSource;
         private CancellationTokenSource _audioSocketSenderTokenSource;
+        private bool _requestedSocketStateOpen;
+
         private STTData _data;
         private Action _additionalDisposeAction;
 
@@ -54,6 +57,7 @@ namespace Virbe.Core
 
         internal void OpenSocket()
         {
+            _requestedSocketStateOpen = true;
             ConnectToSttSocket().Forget();
             _audioSocketSenderTokenSource?.Cancel();
             _audioSocketSenderTokenSource = new CancellationTokenSource();
@@ -62,7 +66,7 @@ namespace Virbe.Core
 
         internal void CloseSocket()
         {
-            _audioSocketSenderTokenSource?.Cancel();
+            _requestedSocketStateOpen = false;
             DisposeSocketConnection();
         }
 
@@ -125,10 +129,11 @@ namespace Virbe.Core
 
             _socketSttClient.On(SpeechRecognized, (response) =>
             {
-                JArray jsonArray = JArray.Parse(response.ToString());
-                string result = (string)jsonArray[0]["text"];
-                _logger.Log($"[{DateTime.Now}] Recognized text: {result}");
-                _currentSttResult.Append(result);
+                _logger.Log($"[{DateTime.Now}] Recognized text: {response}");
+                //JArray jsonArray = JArray.Parse(response.ToString());
+                //string result = (string)jsonArray[0]["text"];
+                //_logger.Log($"[{DateTime.Now}] Recognized text: {result}");
+                //_currentSttResult.Append(result);
             });
 
 
@@ -148,8 +153,10 @@ namespace Virbe.Core
                 SendTextFromRresult();
                 _logger.Log($"Disconnected from the stt socket {args}");
             };
-
-            await _socketSttClient.ConnectAsync(_sttSocketTokenSource.Token);
+            if (_requestedSocketStateOpen)
+            {
+                await _socketSttClient.ConnectAsync(_sttSocketTokenSource.Token);
+            }
         }
 
         private void SendTextFromRresult()
@@ -167,11 +174,16 @@ namespace Virbe.Core
         {
             _sttSocketTokenSource?.Cancel();
             var tempSocketHandle = _socketSttClient;
-            await Task.Delay(1500);
+            await Task.Delay(3500);
             SendTextFromRresult();
-            await tempSocketHandle.DisconnectAsync();
-            tempSocketHandle.Dispose();
-            tempSocketHandle = null;
+            //in case user callOpenSocket during closing action
+            if (!_requestedSocketStateOpen)
+            {
+                _audioSocketSenderTokenSource?.Cancel();
+                await tempSocketHandle.DisconnectAsync();
+                tempSocketHandle.Dispose();
+                tempSocketHandle = null;
+            }
         }
 
         void IDisposable.Dispose()
