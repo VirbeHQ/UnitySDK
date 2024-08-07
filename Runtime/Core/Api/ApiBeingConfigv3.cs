@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using Plugins.Virbe.Core.Api;
 using Newtonsoft.Json;
 using System.Linq;
 
@@ -34,6 +33,9 @@ namespace Virbe.Core
         List<ConversationData> IApiBeingConfig.ConversationData => _conversationData;
         private List<ConversationData> _conversationData = new List<ConversationData>();
         bool IApiBeingConfig.HasRoom => _hasRoom;
+
+        string IApiBeingConfig.LocationId => Location?.Id;
+
         private bool _hasRoom;
 
         internal void Initialize()
