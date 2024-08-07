@@ -12,7 +12,7 @@ namespace Virbe.Core
 {
     internal sealed class RoomCommunicationHandler: ICommunicationHandler
     {
-        public event Action<string, Action<RoomDto.BeingVoiceData>> RequestTTSProcessing;
+        public event Action<TTSProcessingArgs> RequestTTSProcessing;
         bool ICommunicationHandler.Initialized => _initialized;
 
         private VirbeUserSession _currentUserSession;
@@ -199,7 +199,8 @@ namespace Virbe.Core
                                 }
                                 else if(!string.IsNullOrEmpty(messageText))
                                 {
-                                    RequestTTSProcessing?.Invoke(messageText, (data) => ProcessResponse(message, data));
+                                    var args = new TTSProcessingArgs(messageText, Guid.NewGuid(), (data) => ProcessResponse(message, data));
+                                    RequestTTSProcessing?.Invoke(args);
                                 }
                             }
                             catch (Exception e)
