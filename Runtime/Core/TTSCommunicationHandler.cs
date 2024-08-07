@@ -23,15 +23,19 @@ namespace Virbe.Core
         bool ICommunicationHandler.Initialized => _initialized;
         private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(TTSCommunicationHandler));
 
+        private readonly Dictionary<string, string> _headers = new Dictionary<string, string>();
         private readonly TTSData _data;
         private readonly string _endpoint;
         private RequestActionType _definedActions = RequestActionType.ProcessTTS;
         private bool _initialized;
+        private string _locationId;
 
-        internal TTSCommunicationHandler(string baseUrl, TTSData data)
+        internal TTSCommunicationHandler(string baseUrl, TTSData data, string locationId)
         {
             _data = data;
             _endpoint = baseUrl;
+            _locationId = locationId;
+            _headers.Add("Virbe-Location-Id", _locationId);
         }
 
         void IDisposable.Dispose()
@@ -48,6 +52,8 @@ namespace Virbe.Core
                 try
                 {
                     var textToProcess = args[0] as string;
+                    _logger.Log($"TTS processing : \"{textToProcess}\"");
+
                     var resultData = await ProcessText(textToProcess);
                     var voiceData = new RoomDto.BeingVoiceData()
                     {
@@ -71,9 +77,11 @@ namespace Virbe.Core
             return Task.CompletedTask;
         }
 
-        private async Task<TTSResponseModel> ProcessText(string text)
+        private async Task<TTSResponseModel> ProcessText(string text, string language = null, string voice = null)
         {
-            return await Request<TTSResponseModel>($"{_endpoint}{_data.Path}", HttpMethod.Post, new Dictionary<string, string>(), true, $"{{ \"text\" : \"{text}\" }}");
+            var msg = new RequestMessage() {text = text, language = language, voice = voice };
+            var json = JsonConvert.SerializeObject(msg);
+            return await Request<TTSResponseModel>($"{_endpoint}{_data.Path}", HttpMethod.Post, _headers, true, json);
         }
 
         private async Task<T> Request<T>(string endpoint, HttpMethod method, Dictionary<string, string> headers, bool ensureSuccess,
@@ -114,5 +122,11 @@ namespace Virbe.Core
             return responseData;
         }
 
+        private class RequestMessage
+        {
+            public string text { get; set; }
+            public string voice { get; set; }
+            public string language { get; set; }
+        }
     }
 }
