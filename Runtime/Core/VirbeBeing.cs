@@ -92,6 +92,7 @@ namespace Virbe.Core
         private void OnDestroy()
         {
             _communicationSystem.Dispose();
+            StopAllCoroutines();
         }
 
         public void InitializeFromConfigJson(string configJson)
@@ -332,8 +333,8 @@ namespace Virbe.Core
 
         private void ScheduleChangeBeingStateAfterTimeoutIfNeeded()
         {
-            //in case action was scheduled but being was disposed
-            if(gameObject == null)
+            //safeguard if being is already diabled
+            if (!enabled || !gameObject.activeInHierarchy)
             {
                 return;
             }
@@ -354,7 +355,7 @@ namespace Virbe.Core
                     // make sure being is not constantly waiting for recording
                     // Next state: InConversation
                     _autoBeingStateChangeCoroutine =
-                        StartCoroutine(WaitAndChangeToState(inConversationStateTimeout, Behaviour.Focused));
+                          StartCoroutine(WaitAndChangeToState(inConversationStateTimeout, Behaviour.Focused));
                     break;
                 case Behaviour.RequestError:
                     _autoBeingStateChangeCoroutine =
