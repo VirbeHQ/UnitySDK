@@ -28,14 +28,12 @@ namespace Virbe.Core
         private readonly string _endpoint;
         private RequestActionType _definedActions = RequestActionType.ProcessTTS;
         private bool _initialized;
-        private string _locationId;
 
         internal TTSCommunicationHandler(string baseUrl, TTSData data, string locationId)
         {
             _data = data;
             _endpoint = baseUrl;
-            _locationId = locationId;
-            _headers.Add("Virbe-Location-Id", _locationId);
+            _headers.Add("Virbe-Location-Id", locationId);
         }
 
         void IDisposable.Dispose()

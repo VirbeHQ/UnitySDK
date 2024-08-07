@@ -3,8 +3,6 @@ using System.Collections;
 using System.IO;
 using System.Linq;
 using Cysharp.Threading.Tasks;
-using Cysharp.Threading.Tasks.CompilerServices;
-using Plugins.Virbe.Core.Api;
 using UnityEngine;
 using UnityEngine.Events;
 using Virbe.Core.Actions;
@@ -19,6 +17,7 @@ namespace Virbe.Core
     public class VirbeBeing : MonoBehaviour
     {
         public event Action<BeingState> BeingStateChanged;
+        public event Action<string> UserSpeechRecognized;
 
         internal event Action ConversationStarted;
         internal event Action ConversationEnded;
@@ -77,6 +76,7 @@ namespace Virbe.Core
             _communicationSystem = new CommunicationSystem(this);
             _communicationSystem.UserActionFired += OnUserAction;
             _communicationSystem.BeingActionFired += (args) => _virbeActionPlayer.ScheduleNewAction(args);
+            _communicationSystem.UserSpeechRecognized += (speech) => UserSpeechRecognized?.Invoke(speech);
         }
 
         private void Start()
@@ -110,7 +110,7 @@ namespace Virbe.Core
 
         public async UniTask StartNewConversation(bool forceNewEndUser = false, string endUserId = null)
         {
-            if(ApiBeingConfig == null || !ApiBeingConfig.HasRoom)
+            if(ApiBeingConfig == null)
             {
                 _logger.LogError($"No api being config provided, can't start new coonversation");
                 return;
@@ -332,6 +332,11 @@ namespace Virbe.Core
 
         private void ScheduleChangeBeingStateAfterTimeoutIfNeeded()
         {
+            //in case action was scheduled but being was disposed
+            if(gameObject == null)
+            {
+                return;
+            }
             if (_autoBeingStateChangeCoroutine != null)
             {
                 // Canceling previous timeout to avoid unexpected changes
@@ -342,7 +347,6 @@ namespace Virbe.Core
             {
                 case Behaviour.Listening:
                     // make sure being is not constantly waiting for recording
-                    // Next state: InConversation
                     _autoBeingStateChangeCoroutine =
                         StartCoroutine(WaitAndChangeToState(listeningStateTimeout, Behaviour.InConversation));
                     break;
@@ -368,7 +372,10 @@ namespace Virbe.Core
         private IEnumerator WaitAndChangeToState(float timeout, Behaviour newBehaviour)
         {
             yield return new WaitForSeconds(timeout);
-            ChangeBeingState(newBehaviour);
+            if (gameObject != null)
+            {
+                ChangeBeingState(newBehaviour);
+            }
         }
 
         public void OnUserAction(UserAction userAction)
