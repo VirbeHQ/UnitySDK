@@ -1,26 +1,23 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using Plugins.Virbe.Core.Api;
 using Virbe.Core.Actions;
 using Virbe.Core.Api;
 using Virbe.Core.Logger;
-using Virbe.Core.Speech;
 using static Virbe.Core.CommunicationSystem;
 
 namespace Virbe.Core
 {
-    internal sealed class EndlessSocketCommunicationHandler : ICommunicationHandler
+    internal sealed class ConversationSocketCommunicationHandler : ICommunicationHandler
     {
-        public event Action<string, Action<RoomDto.BeingVoiceData>> RequestTTSProcessing;
+        public event Action<TTSProcessingArgs> RequestTTSProcessing;
 
         private const string ConversationInitialize = "conversation-init";
         private const string ConversationMessage = "conversation-message";
@@ -35,7 +32,7 @@ namespace Virbe.Core
         private readonly RequestActionType _definedActions = RequestActionType.SendAudioStream;
 
         private bool _initialized;
-        private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(EndlessSocketCommunicationHandler));
+        private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(ConversationSocketCommunicationHandler));
         private SocketIOClient.SocketIO _socketClient;
         private ConcurrentQueue<byte[]> _speechBytesAwaitingSend = new ConcurrentQueue<byte[]>();
         private StringBuilder _currentSttResult = new StringBuilder();
@@ -47,13 +44,16 @@ namespace Virbe.Core
         private ActionToken _actionToken;
         private VirbeUserSession _currentSession;
         private List<SupportedPayload> _supportedPayloads;
-
-        internal EndlessSocketCommunicationHandler(string baseUrl, ConversationData data , ActionToken actionToken)
+        private ConnectionType _connectionType;
+        private Action _additionalDisposeAction;
+        private ConcurrentQueue<SpeechChunk> _speechChunks = new ConcurrentQueue<SpeechChunk>();
+        internal ConversationSocketCommunicationHandler(string baseUrl, ConversationData data, ActionToken actionToken, ConnectionType connectionType)
         {
             _baseUrl = baseUrl;
             _data = data;
             _supportedPayloads = data.SupportedPayloads;
             _actionToken = actionToken;
+            _connectionType = connectionType;
         }
 
         bool ICommunicationHandler.HasCapability(RequestActionType type)
@@ -65,10 +65,16 @@ namespace Virbe.Core
         {
             _initialized = true;
             _currentSession = session;
-            return ConnectToEndlessSocket();
-        }
+            return ConnectToSocket();
 
-        internal void CloseSocket()
+        }
+        internal void StartSendingSpeech() => StartSpeech().Forget();
+
+        internal void StopSendingSpeech() => StopSpeech().Forget();
+
+        internal void SetAdditionalDisposeAction(Action callback) => _additionalDisposeAction = callback;
+
+        private void CloseSocket()
         {
             _audioSocketSenderTokenSource?.Cancel();
             DisposeSocketConnection();
@@ -113,7 +119,7 @@ namespace Virbe.Core
             }
         }
 
-        private Task ConnectToEndlessSocket()
+        private Task ConnectToSocket()
         {
             _endlessSocketTokenSource?.Cancel();
             _endlessSocketTokenSource = new CancellationTokenSource();
@@ -125,20 +131,37 @@ namespace Virbe.Core
 
             _socketClient.On(ConversationMessage, (response) => HandleConversationMessage(response.ToString()));
 
-            _socketClient.On(SpeechRecognized, (response) => _logger.Log($"[{DateTime.Now}] Recognized text: {response}"));
+            _socketClient.On(SpeechRecognized, (response) => {
+
+                var recognizedChunks = JsonConvert.DeserializeObject<List<RecognizedResponse>>(response.ToString());
+                var firstChunk = recognizedChunks.FirstOrDefault();
+                if (firstChunk != null) {
+
+                    _logger.Log($"[{DateTime.Now}] Recognized text: {firstChunk.chunk}, language: {firstChunk.language}, final result: {firstChunk.isFinal}");
+                    if (firstChunk.isFinal)
+                    {
+                        _actionToken?.UserSpeechRecognized(firstChunk.chunk);
+                    }
+                }
+            });
 
             _socketClient.On(StateChanged, (response) =>
             {
                 _logger.Log($"[{DateTime.Now}]Conversation state changed : {response}");
                 var responseMessage = response.ToString();
                 var state = JsonConvert.DeserializeObject<List<StateMessage>>(responseMessage);
-                if(state.FirstOrDefault()?.IndicateInitialization == true)
+                if (state.FirstOrDefault()?.IndicateInitialization == true)
                 {
-                    OnInitialized().Forget();
+                    _logger.Log($"Conversation initialized");
+
+                    if (_connectionType == ConnectionType.Continous)
+                    {
+                        StartSpeech().Forget();
+                    }
                 }
             });
 
-            _socketClient.OnConnected += (sender, args) => OnConnected().Forget(); 
+            _socketClient.OnConnected += (sender, args) => OnConnected().Forget();
 
             _socketClient.OnDisconnected += (sender, args) =>
             {
@@ -147,7 +170,7 @@ namespace Virbe.Core
             };
 
             _socketClient.OnError += (sender, args) => _logger.Log($"Socket error: {args}");
-            
+
             _socketClient.On(ConversationError, (response) => _logger.Log($"[{DateTime.Now}]Conversation error occured : {response}"));
 
             _logger.Log($"Try connecting to socket.io endpoint: {_baseUrl}{_data.Path}");
@@ -160,16 +183,20 @@ namespace Virbe.Core
             await InitializeConversation();
         }
 
-        private async UniTaskVoid OnInitialized()
+        private async UniTaskVoid StartSpeech()
         {
-            _logger.Log($"Conversation initialized - starting speech");
-
             await InitializeSpeech();
 
             _audioSocketSenderTokenSource?.Cancel();
             _audioSocketSenderTokenSource = new CancellationTokenSource();
             SocketAudioSendLoop(_audioSocketSenderTokenSource.Token).Forget();
         }
+
+        private async UniTaskVoid StopSpeech() 
+        {
+            await _socketClient.EmitAsync(SpeechEnd);
+        }
+
         private async Task InitializeConversation()
         {
             var conversationId = _currentSession.ConversationId ?? Guid.Empty.ToString();
@@ -184,7 +211,6 @@ namespace Virbe.Core
                 msg.conversationId = _currentSession.ConversationId;
             }
             await _socketClient.EmitAsync(ConversationInitialize, msg);
-           //_logger.Log(msg.ToString());
         }
 
         private async Task InitializeSpeech()
@@ -192,11 +218,6 @@ namespace Virbe.Core
             var msg = new SpeachInitMessage() {enableContinuousRecognition = "true", sendResultsToConversationEngine = "true" };
             await _socketClient.EmitAsync(SpeechInitialize, msg);
             _logger.Log(msg.ToString());
-        }
-
-        private async Task StopConversation()
-        {
-            await _socketClient.EmitAsync(SpeechEnd);
         }
 
         private void HandleConversationMessage(string responseJson)
@@ -215,23 +236,45 @@ namespace Virbe.Core
             }
             else if ((roomMessage.participantType == "Api" || roomMessage.participantType == "User") && !string.IsNullOrEmpty(messageText))
             {
-                RequestTTSProcessing?.Invoke(messageText, (data) => ProcessResponse(roomMessage, data));
+                var guid = Guid.NewGuid();
+                var ttsProcessingArgs = new TTSProcessingArgs(messageText, guid, (data) => ProcessResponse(guid, data));
+                _speechChunks.Enqueue(new SpeechChunk(ttsProcessingArgs, roomMessage));
+                RequestTTSProcessing?.Invoke(ttsProcessingArgs);
             }
         }
 
-        private void ProcessResponse(RoomDto.RoomMessage message, RoomDto.BeingVoiceData voiceData)
+        private void ProcessResponse(Guid guid, RoomDto.BeingVoiceData voiceData)
         {
-            if (voiceData != null)
+            if (voiceData == null)
             {
-                var action = new BeingAction
+                return;
+            }
+            //in case of wrong order of tts processing
+            foreach (var chunk in _speechChunks)
+            {
+                if (chunk.ProcessingArgs.ID == guid)
                 {
-                    text = message?.action?.text?.text,
-                    speech = voiceData?.data,
-                    marks = voiceData?.marks,
-                    cards = message?.action?.uiAction?.value?.cards,
-                    buttons = message?.action?.uiAction?.value?.buttons,
-                };
-                _actionToken.BeingActionFired?.Invoke(action);
+                    chunk.VoiceData = voiceData;
+                }
+            }
+            while (_speechChunks.TryPeek(out var firstChunk))
+            {
+                if(firstChunk.VoiceData == null)
+                {
+                    return;
+                }
+                if (_speechChunks.TryDequeue(out var result))
+                {
+                    var action = new BeingAction
+                    {
+                        text = result.Message?.action?.text?.text,
+                        speech = result.VoiceData?.data,
+                        marks = result.VoiceData?.marks,
+                        cards = result.Message?.action?.uiAction?.value?.cards,
+                        buttons = result.Message?.action?.uiAction?.value?.buttons,
+                    };
+                    _actionToken.BeingActionFired?.Invoke(action);
+                }
             }
         }
 
@@ -239,7 +282,7 @@ namespace Virbe.Core
         {
             _endlessSocketTokenSource?.Cancel();
             var tempSocketHandle = _socketClient;
-            await StopConversation();
+            await _socketClient.EmitAsync(SpeechEnd);
             await Task.Delay(250);
             await tempSocketHandle.DisconnectAsync();
             tempSocketHandle.Dispose();
@@ -250,6 +293,7 @@ namespace Virbe.Core
         {
             _initialized = false;
             CloseSocket();
+            _additionalDisposeAction?.Invoke();
         }
 
         UniTask ICommunicationHandler.MakeAction(RequestActionType type, params object[] args)
@@ -261,6 +305,26 @@ namespace Virbe.Core
             return UniTask.CompletedTask;
         }
 
+        private class SpeechChunk
+        {
+            public TTSProcessingArgs ProcessingArgs { get; }
+            public RoomDto.RoomMessage Message { get; }
+            public RoomDto.BeingVoiceData VoiceData { get; set; }
+
+            public SpeechChunk(TTSProcessingArgs args, RoomDto.RoomMessage message)
+            {
+                ProcessingArgs = args;
+                Message = message;
+            }
+        }
+
+        private class RecognizedResponse
+        {
+            public string chunk { get; set; }
+            public string language { get; set; }
+            public bool isFinal { get; set; }
+
+        }
         private class InitializeMessage
         {
             public string endUserId { get; set; }
