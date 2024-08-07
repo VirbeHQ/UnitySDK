@@ -54,6 +54,7 @@ namespace Virbe.Core
                 else if(handler.ConnectionProtocol == ConnectionProtocol.wsEndless)
                 {
                   var endlessHandler = new EndlessSocketCommunicationHandler(_apiBeingConfig.BaseUrl, handler, _callActionToken);
+                    endlessHandler.RequestTTSProcessing += (text, callback) => ProcessTTS(text, callback).Forget();
                     _handlers.Add(endlessHandler);
                 }
                 supportedPayloads.AddRange(handler.SupportedPayloads);
@@ -85,11 +86,11 @@ namespace Virbe.Core
                     throw new NotImplementedException();
                 }
             }
-            if(!supportedPayloads.Contains(SupportedPayload.SpeechRecognized))
+            if(_apiBeingConfig.ConversationEngine != EngineType.Room)
             {
                 if (_apiBeingConfig.FallbackTTSData.ConnectionProtocol == ConnectionProtocol.http)
                 {
-                    var ttsRestHandler = new TTSCommunicationHandler(_apiBeingConfig.BaseUrl, _apiBeingConfig.FallbackTTSData);
+                    var ttsRestHandler = new TTSCommunicationHandler(_apiBeingConfig.BaseUrl, _apiBeingConfig.FallbackTTSData, _apiBeingConfig.LocationId);
                     _handlers.Add(ttsRestHandler);
                 }
                 else
@@ -151,7 +152,6 @@ namespace Virbe.Core
             }
         }
 
-        //TODO: add class for tts processing
         internal async UniTaskVoid ProcessTTS(string text, Action<RoomDto.BeingVoiceData> callback)
         {
             foreach (var handler in _handlers)

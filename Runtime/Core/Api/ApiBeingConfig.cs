@@ -32,6 +32,9 @@ namespace Virbe.Core
         private STTData _sttData;
 
         List<ConversationData> IApiBeingConfig.ConversationData => _conversationData;
+
+        string IApiBeingConfig.LocationId => location.id;
+
         private List<ConversationData> _conversationData = new List<ConversationData>();
 
         internal void Initialize()
