@@ -114,7 +114,6 @@ namespace Virbe.UI.Layouts
                 }
             }
 
-
             if (_productCardManager != null)
             {
                 _productCardManager.SetVisible(beingStatusBarVisibleStates.Contains(_lastBeingBehaviour));
@@ -176,6 +175,12 @@ namespace Virbe.UI.Layouts
             _lastBeingException = exception;
 
             RefreshUIState();
+        }
+
+        public void ClearButtonsAndCards()
+        {
+            _lastBeingAction?.buttons?.Clear();
+            _lastBeingAction?.cards?.Clear();
         }
 
         public void RegisterEventConsumer(IVirbeBeingEvetConsumer eventConsumer)
