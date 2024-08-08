@@ -16,7 +16,11 @@ namespace Virbe.Core
     [RequireComponent(typeof(VirbeActionPlayer))]
     public class VirbeBeing : MonoBehaviour
     {
-        public event Action<BeingState> BeingStateChanged;
+        public event Action<BeingState> OnBeingStateChanged;
+        public event Action<UserAction> OnUserAction;
+        public event Action<BeingAction> OnBeingAction;
+        public event Action<bool> OnBeingMuteChange;
+
         public event Action<string> UserSpeechRecognized;
 
         internal event Action ConversationStarted;
@@ -74,7 +78,7 @@ namespace Virbe.Core
                 ApiBeingConfig = new ApiBeingConfig();
             }
             _communicationSystem = new CommunicationSystem(this);
-            _communicationSystem.UserActionFired += OnUserAction;
+            _communicationSystem.UserActionFired += CallUserAction;
             _communicationSystem.BeingActionFired += (args) => _virbeActionPlayer.ScheduleNewAction(args);
             _communicationSystem.UserSpeechRecognized += (speech) => UserSpeechRecognized?.Invoke(speech);
         }
@@ -196,6 +200,7 @@ namespace Virbe.Core
                 _virbeActionPlayer.MuteAudio(isMuted);
             }
             onBeingMuteChange.Invoke(_currentState.isMuted);
+            OnBeingMuteChange?.Invoke(_currentState.isMuted);
         }
 
         public void SetOverrideDefaultSttLangCode(string sttLangCode)
@@ -326,6 +331,7 @@ namespace Virbe.Core
 
                 _currentState._behaviour = newBehaviour;
                 onBeingStateChange?.Invoke(_currentState);
+                OnBeingStateChanged?.Invoke(_currentState);
             }
 
             ScheduleChangeBeingStateAfterTimeoutIfNeeded();
@@ -379,21 +385,23 @@ namespace Virbe.Core
             }
         }
 
-        public void OnUserAction(UserAction userAction)
+        public void CallUserAction(UserAction userAction)
         {
             _currentState.lastUserAction = userAction;
             onUserAction?.Invoke(userAction);
+            OnUserAction?.Invoke(userAction);
         }
 
-        public void OnBeingActionStarted(BeingAction beingAction)
+        public void CallBeingActionStarted(BeingAction beingAction)
         {
             ChangeBeingState(Behaviour.PlayingBeingAction);
 
             _currentState.lastBeingAction = beingAction;
             onBeingAction?.Invoke(beingAction);
+            OnBeingAction?.Invoke(beingAction);
         }
 
-        public void OnBeingActionEnded(BeingAction beingAction)
+        public void CallBeingActionEnded(BeingAction beingAction)
         {
             ChangeBeingState(Behaviour.InConversation);
         }
