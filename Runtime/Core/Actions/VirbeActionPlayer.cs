@@ -79,7 +79,7 @@ namespace Virbe.Core.Actions
         {
             currentBeingAction = beingAction;
 
-            _virbeBeing?.OnBeingActionStarted(beingAction);
+            _virbeBeing?.CallBeingActionStarted(beingAction);
 
             _virbeSpeechPlayer?.Play(beingAction.marks);
             if (beingAction.custom != null)
@@ -137,7 +137,7 @@ namespace Virbe.Core.Actions
             processingInProgress = false;
             if (beingAction != null)
             {
-                _virbeBeing?.OnBeingActionEnded((BeingAction)beingAction);
+                _virbeBeing?.CallBeingActionEnded((BeingAction)beingAction);
             }
         }
 
@@ -183,14 +183,14 @@ namespace Virbe.Core.Actions
 
         private void OnEnable()
         {
-            _virbeBeing.BeingStateChanged += OnStateChange;
+            _virbeBeing.OnBeingStateChanged += OnStateChange;
         }
 
         private void OnDisable()
         {
             StopCurrentAndScheduledActions();
 
-            _virbeBeing.BeingStateChanged+= OnStateChange;
+            _virbeBeing.OnBeingStateChanged+= OnStateChange;
         }
 
         public bool hasActionsToPlay()
