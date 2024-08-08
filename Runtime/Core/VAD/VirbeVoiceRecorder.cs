@@ -20,8 +20,6 @@ namespace Virbe.Core.VAD
 
         public bool IsUserSpeaking => _isRecordingSamples;
 
-        [Header("Virbe Being to send to a user recorded speech")]
-        [SerializeField] private VirbeBeing _virbeBeing;
         [SerializeField] private bool keepConstantRecording = true;
 
         [Range(5, 15)]
