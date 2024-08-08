@@ -4,13 +4,8 @@ using UnityEngine;
 
 namespace Virbe.Core.VAD
 {
-    [RequireComponent(typeof(VirbeVoiceRecorder))]
-    public class VoiceActivationDetection: MonoBehaviour
+    public class VoiceActivationDetection: BaseVADClass
     {
-        [SerializeField] private bool disableWhenBeingIsSpeaking = false;
-        [Tooltip("This is required only when disableWhenBeingIsSpeaking is set to TRUE")]
-        [SerializeField] private VirbeBeing _being;
-
         [SerializeField] private float _speakToBackgroundDiff = 3.3f;
         [SerializeField] private float _talkingPauseTimeToStop = .75f;
         [SerializeField] private float _talkingBeginOffsetTime = .2f; //Seconds
@@ -18,7 +13,6 @@ namespace Virbe.Core.VAD
         [SerializeField] private float _rmsWindowTimeSize = 3;
         [SerializeField] private int _pitchTreshold = 80;
 
-        private VirbeVoiceRecorder _voiceRecorder;
         private int _recordingLength = 60;
         private int _recordingWindowBeginOffset;
         /// <summary>
@@ -44,11 +38,6 @@ namespace Virbe.Core.VAD
         private int _currentCapacity;
         private int _defaultCapacity;
 
-        private void Awake()
-        {
-            _voiceRecorder = GetComponent<VirbeVoiceRecorder>();
-        }
-
         public void ChangeSpeakToBackground(float value)
         {
             _speakToBackgroundDiff = value;
@@ -73,9 +62,7 @@ namespace Virbe.Core.VAD
         }
 
         void Start()
-        {
-            
-            Application.targetFrameRate = 60;
+        { 
             _amplitudes = new float[_amplitudeArrayLength];
             _spectrum = new Complex[_spectrumArrayLength];
             _spectrumSamples = new float[_spectrumArrayLength];
@@ -88,15 +75,16 @@ namespace Virbe.Core.VAD
             Debug.Log($"Sound process frame time is {(float)_amplitudeArrayLength / _frequency}");
         }
 
-        private void Update()
+        protected override void Update()
         {
-            if (disableWhenBeingIsSpeaking && _being.IsBeingSpeaking)
+            base.Update();
+            if (!ShouldListenToUser)
             {
                 return;
             }
 
-            var talking = VoiceDetection();
-            if (talking)
+            WasTalkingLastFrame = VoiceDetection();
+            if (WasTalkingLastFrame)
             {
                 if (!_voiceRecorder.IsUserSpeaking)
                 {
@@ -107,7 +95,7 @@ namespace Virbe.Core.VAD
                 _currentTalkingPauseTime = 0;
                 _stopCalled = false;
             }
-            else if (!talking && _voiceRecorder.IsUserSpeaking)
+            else if (!WasTalkingLastFrame && _voiceRecorder.IsUserSpeaking)
             {
                 if (_currentTalkingPauseTime < _talkingPauseTimeToStop)
                 {
