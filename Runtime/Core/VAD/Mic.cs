@@ -99,7 +99,7 @@ namespace Virbe.Core.VAD
             Initialize();
         }
 
-        private static void Initialize()
+        internal static void Initialize()
         {
             if (m_Instance == null)
                 m_Instance = GameObject.FindObjectOfType<Mic>();
@@ -305,23 +305,6 @@ namespace Virbe.Core.VAD
                 yield return null;
             }
         }
-
-        //IEnumerator ReadRawAudio()
-        //{
-        //    var sampleCount = 0;
-        //    while (AudioClip != null && Microphone.IsRecording(CurrentDeviceName))
-        //    {
-        //        if (AudioClip.samples <= sampleCount)
-        //        {
-        //            continue;
-        //        }
-        //        var temp = new float[Sample.Length];
-        //        AudioClip.GetData(temp, sampleCount);
-        //        ++sampleCount;
-        //        OnSampleReady?.Invoke(sampleCount, temp);
-        //        yield return new WaitForEndOfFrame();
-        //    }
-        //}
 
 
         #endregion
