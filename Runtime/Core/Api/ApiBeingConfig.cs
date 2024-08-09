@@ -1,5 +1,4 @@
 using Newtonsoft.Json;
-using Plugins.Virbe.Core.Api;
 using System;
 using System.Collections.Generic;
 
@@ -32,10 +31,12 @@ namespace Virbe.Core
         private STTData _sttData;
 
         List<ConversationData> IApiBeingConfig.ConversationData => _conversationData;
+        private List<ConversationData> _conversationData = new List<ConversationData>();
 
         string IApiBeingConfig.LocationId => location.id;
 
-        private List<ConversationData> _conversationData = new List<ConversationData>();
+        AvatarData IApiBeingConfig.AvatarData => _avatarData;
+        private AvatarData _avatarData;
 
         internal void Initialize()
         {
@@ -59,6 +60,7 @@ namespace Virbe.Core
             {
                 _ttsData = new TTSData(ConnectionProtocol.http, ttsConfig.audioChannels, ttsConfig.audioFrequency, ttsConfig.audioSampleBits, string.Empty);
             }
+            _avatarData = new AvatarData() { AvatarUrl = host.character.mainFile };
         }
 
         [Serializable]

@@ -59,7 +59,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 03e9b9f959d38471a8923229e038ce0d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _virbeBeing: {fileID: 0}
   keepConstantRecording: 1
   maxRecordingTime: 15
   keepRecordingAfterStopTime: 0.5
@@ -79,6 +78,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   disableWhenBeingIsSpeaking: 1
   _being: {fileID: 0}
+  _waitForVADTarget: 0
+  _raycastSphereSize: 0.5
+  _castDistance: 2
+  _pointingAtVadTarget: 0
+  _mainCamera: {fileID: 0}
+  _vadTargetLayer:
+    serializedVersion: 2
+    m_Bits: 0
   _speakToBackgroundDiff: 2.7
   _talkingPauseTimeToStop: 0.75
   _talkingBeginOffsetTime: 0.2
