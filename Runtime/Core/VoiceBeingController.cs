@@ -8,7 +8,7 @@ namespace Virbe.Core
         [SerializeField] private VirbeVoiceRecorder _voiceRecorder;
         [SerializeField] private VirbeBeing _being;
 
-        private void OnEnable()
+        protected virtual void OnEnable()
         {
             _voiceRecorder.OnStartSpeaking += _being.UserHasStartedSpeaking;
             _voiceRecorder.OnStopSpeaking += _being.UserHasStoppedSpeaking;
@@ -16,7 +16,7 @@ namespace Virbe.Core
             _voiceRecorder.OnFullAudioReady += SendFullAudio;
         }
 
-        private void OnDisable()
+        protected virtual void OnDisable()
         {
             _voiceRecorder.OnStartSpeaking -= _being.UserHasStartedSpeaking;
             _voiceRecorder.OnStopSpeaking -= _being.UserHasStoppedSpeaking;

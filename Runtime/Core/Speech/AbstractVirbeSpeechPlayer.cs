@@ -23,11 +23,9 @@ namespace Virbe.Core.Speech
 
         [SerializeField] protected VisemeConfig[] visemesConfiguration;
 
-        [SerializeField]
-        protected AnimationCurve visemeInAnimationCurve = AnimationCurve.EaseInOut(0.0f, 0.0f, 1.0f, 0.5f);
+        [SerializeField] protected AnimationCurve visemeInAnimationCurve = AnimationCurve.EaseInOut(0.0f, 0.0f, 1.0f, 0.5f);
 
-        [SerializeField]
-        protected AnimationCurve visemeOutAnimationCurve = AnimationCurve.EaseInOut(0.0f, 0.5f, 1.0f, 0f);
+        [SerializeField] protected AnimationCurve visemeOutAnimationCurve = AnimationCurve.EaseInOut(0.0f, 0.5f, 1.0f, 0f);
 
         [Range(0f, 1f)] [SerializeField] protected float volumeMultiplier = 0.7f;
 
@@ -35,10 +33,10 @@ namespace Virbe.Core.Speech
         [Range(0.1f, 0.3f)] [SerializeField] protected float PhonemeInTime = 0.1f;
         [Range(0.1f, 0.3f)] [SerializeField] protected float PhonemeFadeTime = 0.2f;
 
-        string[] visemeMappingDict = new string[0];
+        private string[] visemeMappingDict = new string[0];
 
-        PlayableGraph playableGraph;
-        AnimationLayerMixerPlayable mixerPlayable;
+        private PlayableGraph playableGraph;
+        private AnimationLayerMixerPlayable mixerPlayable;
 
         private List<BeingAction.Mark> _currentVisemes;
         private int _currentVisemeIndex;
@@ -46,6 +44,19 @@ namespace Virbe.Core.Speech
         private BeingAction.Mark _nextViseme;
         private float _currentSpeechTime;
         private float _speechDuration;
+
+        protected virtual void OnDestroy()
+        {
+            playableGraph.Destroy();
+        }
+
+        protected virtual void Update()
+        {
+            if (_currentVisemes != null)
+            {
+                AdvanceVisemes(Time.deltaTime);
+            }
+        }
 
         protected abstract AnimationLayerMixerPlayable CreateAnimationLayerMixerPlayable(PlayableGraph playableGraph,
             int inputCount);
@@ -57,7 +68,8 @@ namespace Virbe.Core.Speech
                 return;
             }
 
-            if (!default(PlayableGraph).Equals(playableGraph)) playableGraph.Destroy();
+            if (!default(PlayableGraph).Equals(playableGraph))
+                playableGraph.Destroy();
 
             // Creates the graph, the mixer and binds them to the Animator.
             playableGraph = PlayableGraph.Create();
@@ -84,10 +96,6 @@ namespace Virbe.Core.Speech
             playableGraph.Play();
         }
 
-        private void OnDestroy()
-        {
-            playableGraph.Destroy();
-        }
 
         public void Play(List<BeingAction.Mark> marks)
         {
@@ -112,14 +120,6 @@ namespace Virbe.Core.Speech
             _currentSpeechTime = 0;
             _prevViseme = null;
             _nextViseme = null;
-        }
-
-        private void Update()
-        {
-            if (_currentVisemes != null)
-            {
-                AdvanceVisemes(Time.deltaTime);
-            }
         }
 
         private void AdvanceVisemes(float time)
