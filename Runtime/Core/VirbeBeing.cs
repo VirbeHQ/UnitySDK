@@ -23,6 +23,11 @@ namespace Virbe.Core
 
         public event Action<string> UserSpeechRecognized;
 
+        public Behaviour CurrentBeingBehaviour => _currentState._behaviour;
+        public bool IsBeingSpeaking => _virbeActionPlayer.HasActionsToPlay;
+        public TextAsset ActiveConfigAsset => beingConfigJson;
+        public IApiBeingConfig ApiBeingConfig { get; private set; }
+
         internal event Action ConversationStarted;
         internal event Action ConversationEnded;
 
@@ -30,17 +35,11 @@ namespace Virbe.Core
         internal event Action UserStopSpeaking;
         internal event Action UserLeftConversation;
 
-        public Behaviour CurrentBeingBehaviour => _currentState._behaviour;
-        public bool IsBeingSpeaking => _virbeActionPlayer.hasActionsToPlay();
-        public TextAsset ActiveConfigAsset => beingConfigJson;
-        public IApiBeingConfig ApiBeingConfig { get; private set; }
-
         [Header("Being Configuration")]
         [Tooltip("E.g. \"Your API Config (check out Hub to get one or generate your Open Source)\"")]
         [SerializeField] protected internal TextAsset beingConfigJson;
 
         [SerializeField] protected internal bool autoStartConversation = true;
-        [SerializeField] protected internal bool createNewEndUserInFocused = false;
         [SerializeField] private float focusedStateTimeout = 60f;
         [SerializeField] private float inConversationStateTimeout = 30f;
         [SerializeField] private float listeningStateTimeout = 10f;
@@ -111,6 +110,14 @@ namespace Virbe.Core
             ApiBeingConfig = VirbeUtils.ParseConfig(textAsset.text);
         }
 
+        public void SetSettings(bool autoStartConversation = true, float focusedStateTimeout= 60, float inConversationTimeout = 30, float listeningTimeout = 10)
+        {
+            this.autoStartConversation = autoStartConversation;
+            this.focusedStateTimeout = focusedStateTimeout;
+            this.inConversationStateTimeout = inConversationTimeout;
+            this.listeningStateTimeout = listeningTimeout;
+        }
+
         public void StartNewConversationWithUserSession(string endUserId, string roomId) => RestoreConversation(endUserId, roomId).Forget();
 
         public async UniTask StartNewConversation(bool forceNewEndUser = false, string endUserId = null)
@@ -136,13 +143,13 @@ namespace Virbe.Core
             ConversationEnded?.Invoke();
         }
 
-        public void UserHasApproached()
+        public void UserHasApproached(bool createNewEndUser = false)
         {
             if (CanChangeBeingState(Behaviour.Focused))
             {
-                if (createNewEndUserInFocused && _currentState._behaviour == Behaviour.Idle)
+                if (createNewEndUser && _currentState._behaviour == Behaviour.Idle)
                 {
-                    StartNewConversation(createNewEndUserInFocused).Forget();
+                    StartNewConversation(createNewEndUser).Forget();
                 }
 
                 ChangeBeingState(Behaviour.Focused);
