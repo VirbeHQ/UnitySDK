@@ -24,9 +24,29 @@ namespace Virbe.Core.Gestures
         private VirbeActionPlayer _beingActionPlayer;
         private Coroutine talkingTypeChangeCoroutine;
 
-        private void Awake()
+        protected virtual void Awake()
         {
             _beingActionPlayer = GetComponent<VirbeActionPlayer>();
+        }
+
+        protected virtual void OnEnable()
+        {
+            _gestureScheduler.OnGestureStart += PlayGestureImmediately;
+            _emotionScheduler.OnEmotionStart += PlayEmotionImmediately;
+            _emotionScheduler.OnEmotionStop += StopEmotionImmediately;
+        }
+
+        protected virtual void OnDisable()
+        {
+            _gestureScheduler.OnGestureStart -= PlayGestureImmediately;
+            _emotionScheduler.OnEmotionStart -= PlayEmotionImmediately;
+            _emotionScheduler.OnEmotionStop -= StopEmotionImmediately;
+        }
+
+        protected virtual void Update()
+        {
+            _gestureScheduler.AdvanceBy(Time.deltaTime);
+            _emotionScheduler.AdvanceBy(Time.deltaTime);
         }
 
         public void SchedulePlayGestures(IEnumerable<Gesture> gestures)
@@ -102,7 +122,7 @@ namespace Virbe.Core.Gestures
             }
         }
 
-        IEnumerator ChangeTalkingAnimatorValueCoroutine(float targetValue)
+        private IEnumerator ChangeTalkingAnimatorValueCoroutine(float targetValue)
         {
             float currentValue = _beingActionPlayer._animator.GetFloat(TALK_TYPE_ANIMATOR_PARAM);
             float time = 0;
@@ -139,25 +159,5 @@ namespace Virbe.Core.Gestures
             }
         }
 
-
-        private void Update()
-        {
-            _gestureScheduler.AdvanceBy(Time.deltaTime);
-            _emotionScheduler.AdvanceBy(Time.deltaTime);
-        }
-
-        private void OnEnable()
-        {
-            _gestureScheduler.OnGestureStart += PlayGestureImmediately;
-            _emotionScheduler.OnEmotionStart += PlayEmotionImmediately;
-            _emotionScheduler.OnEmotionStop += StopEmotionImmediately;
-        }
-
-        private void OnDisable()
-        {
-            _gestureScheduler.OnGestureStart -= PlayGestureImmediately;
-            _emotionScheduler.OnEmotionStart -= PlayEmotionImmediately;
-            _emotionScheduler.OnEmotionStop -= StopEmotionImmediately;
-        }
     }
 }
