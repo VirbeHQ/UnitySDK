@@ -39,7 +39,7 @@ namespace Virbe.Core
         [Tooltip("E.g. \"Your API Config (check out Hub to get one or generate your Open Source)\"")]
         [SerializeField] protected internal TextAsset beingConfigJson;
 
-        [SerializeField] protected internal bool autoStartConversation = true;
+        [SerializeField] protected internal bool autoStartConversation = false;
         [SerializeField] private float focusedStateTimeout = 60f;
         [SerializeField] private float inConversationStateTimeout = 30f;
         [SerializeField] private float listeningStateTimeout = 10f;
@@ -63,29 +63,21 @@ namespace Virbe.Core
         private VirbeActionPlayer _virbeActionPlayer;
         private Coroutine _autoBeingStateChangeCoroutine;
         private bool _saveWaveSamplesDebug = false;
+        private bool _initialized;
 
         private void Awake()
         {
             _virbeActionPlayer = GetComponent<VirbeActionPlayer>();
-
+            _initialized = false;
             if (beingConfigJson != null)
             {
-                ApiBeingConfig = VirbeUtils.ParseConfig(beingConfigJson.text);
+                InitializeBeing(beingConfigJson.text);
             }
-            else
-            {
-                ApiBeingConfig = new ApiBeingConfig();
-            }
-            _communicationSystem = new CommunicationSystem(this);
-            _communicationSystem.UserActionFired += CallUserAction;
-            _communicationSystem.BeingActionFired += (args) => _virbeActionPlayer.ScheduleNewAction(args);
-            _communicationSystem.UserSpeechRecognized += (speech) => UserSpeechRecognized?.Invoke(speech);
         }
 
         private void Start()
         {
             ChangeBeingState(Behaviour.Idle);
-
             if (autoStartConversation)
             {
                 StartNewConversation().Forget();
@@ -101,13 +93,23 @@ namespace Virbe.Core
         public void InitializeFromConfigJson(string configJson)
         {
             beingConfigJson = new TextAsset(configJson);
-            ApiBeingConfig = VirbeUtils.ParseConfig(configJson);
+            InitializeBeing(configJson);
         }
 
         public void InitializeFromTextAsset(TextAsset textAsset)
         {
             beingConfigJson = textAsset;
-            ApiBeingConfig = VirbeUtils.ParseConfig(textAsset.text);
+            InitializeBeing(textAsset.text);
+        }
+
+        private void InitializeBeing(string configJson)
+        {
+            ApiBeingConfig = VirbeUtils.ParseConfig(configJson);
+            _communicationSystem = new CommunicationSystem(this);
+            _communicationSystem.UserActionFired += CallUserAction;
+            _communicationSystem.BeingActionFired += (args) => _virbeActionPlayer.ScheduleNewAction(args);
+            _communicationSystem.UserSpeechRecognized += (speech) => UserSpeechRecognized?.Invoke(speech);
+            _initialized = true;
         }
 
         public void SetSettings(bool autoStartConversation = true, float focusedStateTimeout= 60, float inConversationTimeout = 30, float listeningTimeout = 10)
@@ -122,7 +124,7 @@ namespace Virbe.Core
 
         public async UniTask StartNewConversation(bool forceNewEndUser = false, string endUserId = null)
         {
-            if(ApiBeingConfig == null)
+            if(!_initialized)
             {
                 _logger.LogError($"No api being config provided, can't start new coonversation");
                 return;
