@@ -19,16 +19,18 @@ namespace Virbe.Core.Actions
     [RequireComponent(typeof(AbstractVirbeSpeechPlayer))]
     public class VirbeActionPlayer : MonoBehaviour
     {
-        [Header("Being Configuration in Scene")] [Tooltip("Delay between consecutive actions")] [SerializeField]
-        protected internal float ActionPauseSeconds = 0.3f;
+        public bool HasActionsToPlay => processingInProgress;
 
-        [SerializeField] protected internal bool PlayWithSound = true;
+        [Header("Being Configuration in Scene")] [Tooltip("Delay between consecutive actions")] 
+        [SerializeField] protected float ActionPauseSeconds = 0.3f;
 
-        [Tooltip("Audio Source to play voice")] [SerializeField]
-        protected internal AudioSource outputAudioSource;
+        [SerializeField] protected bool PlayWithSound = true;
 
-        [Tooltip("Your model animator")] [SerializeField]
-        protected internal Animator _animator;
+        [Tooltip("Audio Source to play voice")]
+        [SerializeField] protected AudioSource outputAudioSource;
+
+        [Tooltip("Your model animator")]
+        [SerializeField] protected internal Animator _animator;
 
         private VirbeBeing _virbeBeing;
         private AbstractVirbeSpeechPlayer _virbeSpeechPlayer;
@@ -40,27 +42,53 @@ namespace Virbe.Core.Actions
         private BeingAction? currentBeingAction;
         private Coroutine voiceEndSignalCoroutine;
 
-        private void Awake()
+        protected virtual void Awake()
         {
-            // Add animation supporting components
             _virbeBeing = GetComponent<VirbeBeing>();
             _virbeAnimatorPlayer = GetComponent<VirbeAnimatorPlayer>();
             _virbeSpeechPlayer = GetComponent<AbstractVirbeSpeechPlayer>();
         }
 
-        private void Start()
+        protected virtual void OnEnable()
+        {
+            _virbeBeing.OnBeingStateChanged += OnStateChange;
+        }
+
+        protected virtual void OnDisable()
+        {
+            StopCurrentAndScheduledActions();
+
+            _virbeBeing.OnBeingStateChanged += OnStateChange;
+        }
+
+        protected virtual void Start()
         {
             SwitchAnimator(_animator);
         }
 
-        private void OnDestroy()
+        protected virtual void OnDestroy()
         {
             StopAllCoroutines();
         }
 
+        protected virtual void Update()
+        {
+            if (processingInProgress || _beingActionsQueue.IsEmpty)
+                return;
+
+            if (_beingActionsQueue.TryDequeue(out var beingAction))
+            {
+                processingInProgress = true;
+                PlayBeingAction(beingAction);
+            }
+        }
+
         public void SwitchAudioSource(AudioSource audioSource)
         {
-            if (outputAudioSource != null) audioSource.Stop();
+            if (outputAudioSource != null)
+            {
+                audioSource.Stop();
+            }
             outputAudioSource = audioSource;
         }
 
@@ -75,7 +103,42 @@ namespace Virbe.Core.Actions
             _virbeAnimatorPlayer?.SwitchToSitting(isSitting);
         }
 
-        void PlayBeingAction(BeingAction beingAction)
+        public void ScheduleNewAction(BeingAction action) => _beingActionsQueue.Enqueue(action);
+
+        public void StopCurrentAndScheduledActions()
+        {
+            _beingActionsQueue.Clear();
+
+            if (voiceEndSignalCoroutine != null && currentBeingAction != null)
+            {
+                StopCoroutine(voiceEndSignalCoroutine);
+                StopBeingAction(currentBeingAction);
+                currentBeingAction = null;
+            }
+
+            if (outputAudioSource && outputAudioSource.isPlaying)
+            {
+                outputAudioSource.Stop();
+            }
+
+            if (_virbeSpeechPlayer != null)
+            {
+                _virbeSpeechPlayer.Stop();
+            }
+
+            if (_virbeAnimatorPlayer != null)
+            {
+                _virbeAnimatorPlayer.SwitchToFocused();
+            }
+        }
+
+        public void MuteAudio(bool muteAudio)
+        {
+            outputAudioSource.mute = muteAudio;
+            PlayWithSound = !muteAudio;
+        }
+
+        private void PlayBeingAction(BeingAction beingAction)
         {
             currentBeingAction = beingAction;
 
@@ -105,7 +168,7 @@ namespace Virbe.Core.Actions
             }
         }
 
-        public bool PlayVoice(byte[] audioBytes, IApiBeingConfig beingConfig)
+        private bool PlayVoice(byte[] audioBytes, IApiBeingConfig beingConfig)
         {
             if (outputAudioSource && audioBytes.Length > 0)
             {
@@ -125,34 +188,19 @@ namespace Virbe.Core.Actions
             }
         }
 
-        IEnumerator AfterVoicePlayed(float time, BeingAction beingAction)
+        private IEnumerator AfterVoicePlayed(float time, BeingAction beingAction)
         {
             yield return new WaitForSeconds(time);
             StopBeingAction(beingAction);
         }
 
 
-        void StopBeingAction(BeingAction? beingAction)
+        private void StopBeingAction(BeingAction? beingAction)
         {
             processingInProgress = false;
             if (beingAction != null)
             {
                 _virbeBeing?.CallBeingActionEnded((BeingAction)beingAction);
-            }
-        }
-
-        public void ScheduleNewAction(BeingAction action) => _beingActionsQueue.Enqueue(action);
-
-        private void Update()
-        {
-            if (processingInProgress || _beingActionsQueue.IsEmpty)
-                return;
-
-            var hasAction = _beingActionsQueue.TryDequeue(out var beingAction);
-            if (hasAction)
-            {
-                processingInProgress = true;
-                PlayBeingAction(beingAction);
             }
         }
 
@@ -179,59 +227,6 @@ namespace Virbe.Core.Actions
                 default:
                     throw new ArgumentOutOfRangeException(nameof(behaviour), behaviour, null);
             }
-        }
-
-        private void OnEnable()
-        {
-            _virbeBeing.OnBeingStateChanged += OnStateChange;
-        }
-
-        private void OnDisable()
-        {
-            StopCurrentAndScheduledActions();
-
-            _virbeBeing.OnBeingStateChanged+= OnStateChange;
-        }
-
-        public bool hasActionsToPlay()
-        {
-            return processingInProgress;
-        }
-
-        public void StopCurrentAndScheduledActions()
-        {
-            while (_beingActionsQueue.TryDequeue(out _))
-            {
-                // do nothing until queue is empty
-            }
-
-            if (voiceEndSignalCoroutine != null && currentBeingAction != null)
-            {
-                StopCoroutine(voiceEndSignalCoroutine);
-                StopBeingAction(currentBeingAction);
-                currentBeingAction = null;
-            }
-
-            if (outputAudioSource && outputAudioSource.isPlaying)
-            {
-                outputAudioSource.Stop();
-            }
-
-            if (_virbeSpeechPlayer != null)
-            {
-                _virbeSpeechPlayer.Stop();
-            }
-
-            if (_virbeAnimatorPlayer != null)
-            {
-                _virbeAnimatorPlayer.SwitchToFocused();
-            }
-        }
-
-        public void MuteAudio(bool muteAudio)
-        {
-            outputAudioSource.mute = muteAudio;
-            PlayWithSound = !muteAudio;
         }
     }
 }

@@ -34,7 +34,7 @@ namespace Virbe.Core.VAD
 
         protected virtual void Update()
         {
-            if (_being == null || disableWhenBeingIsSpeaking && _being?.IsBeingSpeaking == true)
+            if (disableWhenBeingIsSpeaking && _being?.IsBeingSpeaking == true)
             {
                 ShouldListenToUser = false;
                 return;
@@ -56,6 +56,11 @@ namespace Virbe.Core.VAD
                 }
             }
             ShouldListenToUser = true;
+        }
+
+        public void SetBeing(VirbeBeing being)
+        {
+            _being = being;
         }
 
         public void SetCamera(Camera camera)
