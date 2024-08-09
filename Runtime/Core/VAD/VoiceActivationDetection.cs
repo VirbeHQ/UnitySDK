@@ -6,10 +6,10 @@ namespace Virbe.Core.VAD
 {
     public class VoiceActivationDetection: BaseVADClass
     {
-        [SerializeField] private float _speakToBackgroundDiff = 3.3f;
-        [SerializeField] private float _talkingPauseTimeToStop = .75f;
-        [SerializeField] private float _talkingBeginOffsetTime = .2f; //Seconds
-        [SerializeField] private float _minRmsTreshold = 30f;
+        [SerializeField] private float _speakToBackgroundDiff = .3f;
+        [SerializeField] private float _talkingPauseTimeToStop = .5f;
+        [SerializeField] private float _talkingBeginOffsetTime = .5f;
+        [SerializeField] private float _minRmsTreshold = 20f;
         [SerializeField] private float _rmsWindowTimeSize = 3;
         [SerializeField] private int _pitchTreshold = 80;
 
@@ -38,9 +38,14 @@ namespace Virbe.Core.VAD
         private int _currentCapacity;
         private int _defaultCapacity;
 
-        public void ChangeSpeakToBackground(float value)
+        public void SetDetectionArguments(float speekToBackground = .3f, float pauseDelay = .5f, float beginOffset = .5f, float minRmsThreshold = 20, float rmsWindowTimeSize = 3, int pitchThreshold = 80)
         {
-            _speakToBackgroundDiff = value;
+            _speakToBackgroundDiff = speekToBackground;
+            _talkingPauseTimeToStop = pauseDelay;
+            _pitchTreshold = pitchThreshold;
+            _talkingBeginOffsetTime = beginOffset;
+            _minRmsTreshold = minRmsThreshold;
+            _rmsWindowTimeSize = rmsWindowTimeSize;
         }
 
         private void OnEnable()
