@@ -33,10 +33,13 @@ namespace Virbe.Core
         List<ConversationData> IApiBeingConfig.ConversationData => _conversationData;
         private List<ConversationData> _conversationData = new List<ConversationData>();
         bool IApiBeingConfig.HasRoom => _hasRoom;
+        private bool _hasRoom;
 
         string IApiBeingConfig.LocationId => Location?.Id;
 
-        private bool _hasRoom;
+        AvatarData IApiBeingConfig.AvatarData => _avatarData;
+        private AvatarData _avatarData;
+
 
         internal void Initialize()
         {
