@@ -172,7 +172,7 @@ namespace Virbe.Core.VAD
         /// <summary>
         /// Starts to stream the input of the current Mic device
         /// </summary>
-        public void StartRecording(int frequency, int sampleLen)
+        public void StartRecording(int frequency = 16000, int sampleLen = 256)
         {
             CheckPermission();
 

@@ -53,7 +53,7 @@ namespace Virbe.Core.VAD
             var mic = Mic.Instance;
             if (!mic.IsRecording)
             {
-                mic.StartRecording(16000, 32);
+                mic.StartRecording();
             }
         }
 
