@@ -8,7 +8,7 @@ namespace Virbe.Core.VAD
             var audioSource = gameObject.GetComponent<AudioSource>();
 
             var mic = Mic.Instance;
-            mic.StartRecording(16000, 100);
+            mic.StartRecording();
 
             mic.OnSampleReady += (index, segment) => {
                 var clip = AudioClip.Create("clip", 1600, mic.AudioClip.channels, mic.AudioClip.frequency, false);
