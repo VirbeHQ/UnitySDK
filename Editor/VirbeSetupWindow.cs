@@ -8,6 +8,7 @@ using UnityEditor.PackageManager;
 using System.Collections;
 using System.Reflection;
 using System;
+using System.Security.Policy;
 
 namespace Virbe.Core
 {
@@ -234,6 +235,8 @@ namespace Virbe.Core
             if (toggle.value && files.Length == 0)
             {
                 var zipFileName = Path.Combine(Path.GetFullPath(_packagePath), zipPath);
+                var targetDir = Path.Combine(Application.dataPath, "Plugins", "Virbe", "Intergations",Path.GetFileNameWithoutExtension(zipFileName));
+
                 FastZip fastZip = new FastZip();
                 fastZip.ExtractZip(zipFileName, Path.Combine(Path.GetFullPath(_packagePath), _IntegrationsPath), null);
             }
