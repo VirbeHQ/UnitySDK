@@ -238,7 +238,7 @@ namespace Virbe.Core
                 var targetDir = Path.Combine(Application.dataPath, "Plugins", "Virbe", "Intergations",Path.GetFileNameWithoutExtension(zipFileName));
 
                 FastZip fastZip = new FastZip();
-                fastZip.ExtractZip(zipFileName, Path.Combine(Path.GetFullPath(_packagePath), _IntegrationsPath), null);
+                fastZip.ExtractZip(zipFileName, targetDir, null);
             }
             else if (!toggle.value && files.Length > 0)
             {
