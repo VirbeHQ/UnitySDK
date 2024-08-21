@@ -11,6 +11,7 @@ using Plugins.Virbe.Core.Api;
 using Virbe.Core.Actions;
 using Virbe.Core.Api;
 using Virbe.Core.Logger;
+using static Plugins.Virbe.Core.Api.RoomDto;
 using static Virbe.Core.CommunicationSystem;
 
 namespace Virbe.Core
@@ -29,7 +30,7 @@ namespace Virbe.Core
         private const string StateChanged = "state";
 
         bool ICommunicationHandler.Initialized => _initialized;
-        private readonly RequestActionType _definedActions = RequestActionType.SendAudioStream;
+        private readonly RequestActionType _definedActions = RequestActionType.SendAudioStream | RequestActionType.SendText;
 
         private bool _initialized;
         private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(ConversationSocketCommunicationHandler));
@@ -88,6 +89,19 @@ namespace Virbe.Core
                 return;
             }
             _speechBytesAwaitingSend.Enqueue(recordedAudioBytes);
+        }
+
+        private async UniTaskVoid SendText(string text)
+        {
+            if (_socketClient == null)
+            {
+                _logger.LogError($"[VIRBE] Socket not created, could not send speech chunk");
+                return;
+            }
+            var message = new SendTextMessage();
+            message.action = new RoomMessageAction();
+            message.action.text = new RoomMessageActionText(text);
+            await _socketClient.EmitAsync(ConversationMessage, message);
         }
 
         private async UniTaskVoid SocketAudioSendLoop(CancellationToken cancelationToken)
@@ -237,7 +251,7 @@ namespace Virbe.Core
             else if ((roomMessage.participantType == "Api" || roomMessage.participantType == "User") && !string.IsNullOrEmpty(messageText))
             {
                 var guid = Guid.NewGuid();
-                var ttsProcessingArgs = new TTSProcessingArgs(messageText, guid, (data) => ProcessResponse(guid, data));
+                var ttsProcessingArgs = new TTSProcessingArgs(messageText, guid, roomMessage?.action?.text?.language, null, (data) => ProcessResponse(guid, data));
                 _speechChunks.Enqueue(new SpeechChunk(ttsProcessingArgs, roomMessage));
                 RequestTTSProcessing?.Invoke(ttsProcessingArgs);
             }
@@ -302,6 +316,10 @@ namespace Virbe.Core
             {
                 SendSpeech(args[0] as byte[]);
             }
+            else if(type == RequestActionType.SendText)
+            {
+                SendText(args[0] as string).Forget();
+            }
             return UniTask.CompletedTask;
         }
 
@@ -316,6 +334,11 @@ namespace Virbe.Core
                 ProcessingArgs = args;
                 Message = message;
             }
+        }
+
+        private class SendTextMessage
+        {
+            public RoomDto.RoomMessageAction action { get; set; }
         }
 
         private class RecognizedResponse
