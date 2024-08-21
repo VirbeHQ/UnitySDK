@@ -199,7 +199,7 @@ namespace Virbe.Core
                                 }
                                 else if(!string.IsNullOrEmpty(messageText))
                                 {
-                                    var args = new TTSProcessingArgs(messageText, Guid.NewGuid(), (data) => ProcessResponse(message, data));
+                                    var args = new TTSProcessingArgs(messageText, Guid.NewGuid(), message?.action?.text?.language, null, (data) => ProcessResponse(message, data));
                                     RequestTTSProcessing?.Invoke(args);
                                 }
                             }
