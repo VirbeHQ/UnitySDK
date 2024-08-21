@@ -271,10 +271,7 @@ namespace Virbe.Core
 
         public void SendText(string capturedUtterance)
         {
-            if (ApiBeingConfig.HasRoom)
-            {
-                _communicationSystem.SendText(capturedUtterance).Forget();
-            }
+            _communicationSystem.SendText(capturedUtterance).Forget();
         }
 
         public void StopCurrentAndScheduledActions()
