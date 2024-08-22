@@ -10,8 +10,8 @@ using Newtonsoft.Json;
 using Plugins.Virbe.Core.Api;
 using Virbe.Core.Actions;
 using Virbe.Core.Api;
+using Virbe.Core.Custom;
 using Virbe.Core.Logger;
-using static Plugins.Virbe.Core.Api.RoomDto;
 using static Virbe.Core.CommunicationSystem;
 
 namespace Virbe.Core
@@ -99,8 +99,8 @@ namespace Virbe.Core
                 return;
             }
             var message = new SendTextMessage();
-            message.action = new RoomMessageAction();
-            message.action.text = new RoomMessageActionText(text);
+            message.action = new MessageAction();
+            message.action.Text = new TextAction(text);
             await _socketClient.EmitAsync(ConversationMessage, message);
         }
 
@@ -236,22 +236,22 @@ namespace Virbe.Core
 
         private void HandleConversationMessage(string responseJson)
         {
-            var messages = JsonConvert.DeserializeObject<List<RoomDto.RoomMessage>>(responseJson);
+            var messages = JsonConvert.DeserializeObject<List<ConversationMessage>>(responseJson);
             var roomMessage = messages.FirstOrDefault();
-            var messageText = roomMessage?.action?.text?.text;
+            var messageText = roomMessage?.Action?.Text?.Text;
 
             if (!string.IsNullOrEmpty(messageText))
             {
-                _logger.Log($"Got message [{roomMessage.participantType}]:{messageText}");
+                _logger.Log($"Got message [{roomMessage.ParticipantType}]:{messageText}");
             }
-            if (roomMessage.participantType == "EndUser")
+            if (roomMessage.ParticipantType == "EndUser")
             {
                 _actionToken.UserActionFired?.Invoke(new UserAction(messageText));
             }
-            else if ((roomMessage.participantType == "Api" || roomMessage.participantType == "User") && !string.IsNullOrEmpty(messageText))
+            else if ((roomMessage.ParticipantType == "Api" || roomMessage.ParticipantType == "User") && !string.IsNullOrEmpty(messageText))
             {
                 var guid = Guid.NewGuid();
-                var ttsProcessingArgs = new TTSProcessingArgs(messageText, guid, roomMessage?.action?.text?.language, null, (data) => ProcessResponse(guid, data));
+                var ttsProcessingArgs = new TTSProcessingArgs(messageText, guid, roomMessage?.Action?.Text?.Language, null, (data) => ProcessResponse(guid, data));
                 _speechChunks.Enqueue(new SpeechChunk(ttsProcessingArgs, roomMessage));
                 RequestTTSProcessing?.Invoke(ttsProcessingArgs);
             }
@@ -279,13 +279,23 @@ namespace Virbe.Core
                 }
                 if (_speechChunks.TryDequeue(out var result))
                 {
+                    var cards = new List<Card>();
+                    foreach (var cardItem in result.Message?.Action?.UiAction?.Value?.Cards ?? new List<VirbeCard>())
+                    {
+                        cards.Add(cardItem.ToOldCard());
+                    }
+                    var buttons = new List<Button>();
+                    foreach (var cardItem in result.Message?.Action?.UiAction?.Value?.Buttons ?? new List<VirbeButton>())
+                    {
+                        cards.Add(cardItem.ToOldButton());
+                    }
                     var action = new BeingAction
                     {
-                        text = result.Message?.action?.text?.text,
+                        text = result.Message?.Action?.Text?.Text,
                         speech = result.VoiceData?.data,
                         marks = result.VoiceData?.marks,
-                        cards = result.Message?.action?.uiAction?.value?.cards,
-                        buttons = result.Message?.action?.uiAction?.value?.buttons,
+                        cards = cards,
+                        buttons = buttons,
                     };
                     _actionToken.BeingActionFired?.Invoke(action);
                 }
@@ -326,10 +336,10 @@ namespace Virbe.Core
         private class SpeechChunk
         {
             public TTSProcessingArgs ProcessingArgs { get; }
-            public RoomDto.RoomMessage Message { get; }
+            public ConversationMessage Message { get; }
             public RoomDto.BeingVoiceData VoiceData { get; set; }
 
-            public SpeechChunk(TTSProcessingArgs args, RoomDto.RoomMessage message)
+            public SpeechChunk(TTSProcessingArgs args, ConversationMessage message)
             {
                 ProcessingArgs = args;
                 Message = message;
@@ -338,7 +348,7 @@ namespace Virbe.Core
 
         private class SendTextMessage
         {
-            public RoomDto.RoomMessageAction action { get; set; }
+            public MessageAction action { get; set; }
         }
 
         private class RecognizedResponse

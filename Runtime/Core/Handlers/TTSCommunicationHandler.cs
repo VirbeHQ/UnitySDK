@@ -15,11 +15,6 @@ namespace Virbe.Core
 {
     internal sealed class TTSCommunicationHandler : ICommunicationHandler
     {
-        private class TTSResponseModel
-        {
-            public List<BeingAction.Mark> marks;
-            public byte[] speech;
-        }
         bool ICommunicationHandler.Initialized => _initialized;
         private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(TTSCommunicationHandler));
 
@@ -125,6 +120,11 @@ namespace Virbe.Core
             public string text { get; set; }
             public string voice { get; set; }
             public string language { get; set; }
+        }
+        private class TTSResponseModel
+        {
+            public List<BeingAction.Mark> marks;
+            public byte[] speech;
         }
     }
 }
