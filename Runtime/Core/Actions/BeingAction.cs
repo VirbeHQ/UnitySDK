@@ -7,7 +7,6 @@ using UnityEngine;
 using Virbe.Core.Custom;
 using Virbe.Core.Emotions;
 using Virbe.Core.Gestures;
-using VirbeInput = Virbe.Core.Custom.Input;
 
 namespace Virbe.Core.Actions
 {
@@ -102,7 +101,7 @@ namespace Virbe.Core.Actions
                 return null;
             }
 
-            public List<VirbeInput> ExtractVirbeInputs()
+            public List<Virbe.Core.Custom.Input> ExtractVirbeInputs()
             {
                 try
                 {
@@ -113,7 +112,7 @@ namespace Virbe.Core.Actions
                         {
                             return uiObjects?
                                 .Where(element => (string)element["type"] == "input")
-                                .Select(buttonDict => new VirbeInput((JObject)buttonDict))
+                                .Select(buttonDict => new Virbe.Core.Custom.Input((JObject)buttonDict))
                                 .ToList();
                         }
                     }
