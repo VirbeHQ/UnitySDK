@@ -1,15 +1,11 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
-using Newtonsoft.Json.Linq;
 using Virbe.Core.Api;
 using Virbe.Core.Logger;
-using Virbe.Core.Speech;
 
 namespace Virbe.Core
 {
