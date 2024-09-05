@@ -4,10 +4,10 @@ using UnityEngine;
 
 namespace Virbe.Core.Logger
 {
-    internal class VirbeEngineLogger
+    internal class VirbeEngineLogger: Virbe.Core.ILogger
     {
         private static Thread _mainThread = Thread.CurrentThread;
-        private static readonly ILogger Logger = Debug.unityLogger;
+        private static readonly UnityEngine.ILogger Logger = Debug.unityLogger;
 
         private const string Tag = "VirbeEngine";
 
@@ -20,6 +20,9 @@ namespace Virbe.Core.Logger
 
         internal void Log(string message) => LogOnMainThread(LogType.Log, message).Forget();
         internal void LogError(string message) => LogOnMainThread(LogType.Error, message).Forget();
+        void ILogger.Log(string message) => LogOnMainThread(LogType.Log, message).Forget();
+        void ILogger.LogError(string message) => LogOnMainThread(LogType.Error, message).Forget(); 
+
         private async UniTaskVoid LogOnMainThread(LogType logType, string message)
         {
             if (Thread.CurrentThread != _mainThread)

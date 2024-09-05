@@ -3,6 +3,7 @@ using System.Collections.Generic;
 
 namespace Virbe.Core.Utils
 {
+
     public static class DictionaryExtension
     {
         public static TValue GetValueOrDefault<TKey, TValue>

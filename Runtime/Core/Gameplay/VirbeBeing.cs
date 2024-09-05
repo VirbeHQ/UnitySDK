@@ -6,6 +6,8 @@ using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Events;
 using Virbe.Core.Actions;
+using Virbe.Core.Data;
+using Virbe.Core.Handlers;
 using Virbe.Core.Logger;
 using Virbe.Core.ThirdParty.SavWav;
 using Virbe.Core.VAD;
@@ -20,12 +22,17 @@ namespace Virbe.Core
         public event Action<UserAction> OnUserAction;
         public event Action<BeingAction> OnBeingAction;
         public event Action<bool> OnBeingMuteChange;
-
         public event Action<string> UserSpeechRecognized;
+
+        public event Action<VirbeUiAction> OnUiAction;
+        public event Action<CustomAction> OnCustomAction;
+        public event Action<VirbeBehaviorAction> OnBehaviourAction;
+        public event Action<EngineEvent> OnEngineEvent;
+        public event Action<Signal> OnSignal;
+        public event Action<NamedAction> OnNamedAction;
 
         public Behaviour CurrentBeingBehaviour => _currentState._behaviour;
         public bool IsBeingSpeaking => _virbeActionPlayer.HasActionsToPlay;
-        public TextAsset ActiveConfigAsset => beingConfigJson;
         public IApiBeingConfig ApiBeingConfig { get; private set; }
 
         internal event Action ConversationStarted;
@@ -35,9 +42,10 @@ namespace Virbe.Core
         internal event Action UserStopSpeaking;
         internal event Action UserLeftConversation;
 
-        [Header("Being Configuration")]
         [Tooltip("E.g. \"Your API Config (check out Hub to get one or generate your Open Source)\"")]
-        [SerializeField] protected internal TextAsset beingConfigJson;
+        [SerializeField] private string _BaseUrl;
+        [SerializeField] private string _ProfileID;
+        [SerializeField] private string _ProfileSecret;
 
         [SerializeField] protected internal bool autoStartConversation = false;
         [SerializeField] private float focusedStateTimeout = 60f;
@@ -48,9 +56,18 @@ namespace Virbe.Core
         [Header("Being Events")]
         [SerializeField] private UnityEvent<BeingState> onBeingStateChange = new BeingStateChangeEvent();
         [SerializeField] private UnityEvent<bool> onBeingMuteChange = new UnityEvent<bool>();
+        [SerializeField] private UnityEvent<string> userSpeechRecognized;
+
         [SerializeField] private UserActionEvent onUserAction = new UserActionEvent();
         [SerializeField] private BeingActionEvent onBeingAction = new BeingActionEvent();
         [SerializeField] private ConversationErrorEvent onConversationError = new ConversationErrorEvent();
+
+        [SerializeField] private UnityEvent<VirbeUiAction> onUiAction;
+        [SerializeField] private UnityEvent<CustomAction> onCustomAction;
+        [SerializeField] private UnityEvent<VirbeBehaviorAction> onBehaviourAction;
+        [SerializeField] private UnityEvent<EngineEvent> onEngineEvent;
+        [SerializeField] private UnityEvent<Signal> onSignal;
+        [SerializeField] private UnityEvent<NamedAction> onNamedAction;
 
         private readonly BeingState _currentState = new BeingState();
         private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(VirbeBeing));
@@ -60,64 +77,84 @@ namespace Virbe.Core
 
         private CommunicationSystem _communicationSystem;
 
+        private string _beingConfigJson;
         private VirbeActionPlayer _virbeActionPlayer;
         private Coroutine _autoBeingStateChangeCoroutine;
         private bool _saveWaveSamplesDebug = false;
         private bool _initialized;
 
+        private string _appIdentifer;
+
         private void Awake()
         {
+            _appIdentifer = Application.identifier;
             _virbeActionPlayer = GetComponent<VirbeActionPlayer>();
             _initialized = false;
-            if (beingConfigJson != null)
-            {
-                InitializeBeing(beingConfigJson.text);
-            }
+            InitializeBeing(_BaseUrl, _ProfileID, _ProfileSecret);
         }
 
         private void Start()
         {
             ChangeBeingState(Behaviour.Idle);
-            if (autoStartConversation)
-            {
-                StartNewConversation().Forget();
-            }
         }
 
         private void OnDestroy()
         {
-            _communicationSystem.Dispose();
+            _communicationSystem?.Dispose();
             StopAllCoroutines();
         }
 
-        public void InitializeFromConfigJson(string configJson)
-        {
-            beingConfigJson = new TextAsset(configJson);
-            InitializeBeing(configJson);
-        }
-
-        public void InitializeFromTextAsset(TextAsset textAsset)
-        {
-            beingConfigJson = textAsset;
-            InitializeBeing(textAsset.text);
-        }
-
-        private void InitializeBeing(string configJson)
-        {
-            ApiBeingConfig = VirbeUtils.ParseConfig(configJson);
-            _communicationSystem = new CommunicationSystem(this);
-            _communicationSystem.UserActionFired += CallUserAction;
-            _communicationSystem.BeingActionFired += (args) => _virbeActionPlayer.ScheduleNewAction(args);
-            _communicationSystem.UserSpeechRecognized += (speech) => UserSpeechRecognized?.Invoke(speech);
-            _initialized = true;
-        }
-
-        public void SetSettings(bool autoStartConversation = true, float focusedStateTimeout= 60, float inConversationTimeout = 30, float listeningTimeout = 10)
+        public void SetSettings(bool autoStartConversation = true, float focusedStateTimeout = 60, float inConversationTimeout = 30, float listeningTimeout = 10)
         {
             this.autoStartConversation = autoStartConversation;
             this.focusedStateTimeout = focusedStateTimeout;
             this.inConversationStateTimeout = inConversationTimeout;
             this.listeningStateTimeout = listeningTimeout;
+        }
+
+        public void InitializeBeing(string baseUrl, string profileID, string profileSecret)
+        {
+            StartCoroutine(DownloadConfig(baseUrl, profileID, profileSecret).ToCoroutine());
+        }
+
+        private async UniTask DownloadConfig(string baseUrl, string profileID, string profileSecret)
+        {
+            var downloader = new BeingConfigDownloader(baseUrl, profileID, profileSecret, _appIdentifer);
+            _beingConfigJson = await downloader.DownloadConfig();
+
+            if (_beingConfigJson != null)
+            {
+                _initialized = InitializeBeing(_beingConfigJson);
+
+                if (_initialized && autoStartConversation)
+                {
+                    StartNewConversation().Forget();
+                }
+            }
+        }
+
+        private bool InitializeBeing(string configJson)
+        {
+            if (string.IsNullOrEmpty(configJson))
+            {
+                return false;
+            }
+            ApiBeingConfig = VirbeUtils.ParseConfig(configJson);
+            if(ApiBeingConfig == null)
+            {
+                return false;
+            }
+            _communicationSystem = new CommunicationSystem(this, _BaseUrl, _ProfileID, _ProfileSecret, _appIdentifer);
+            _communicationSystem.UserActionExecuted += CallUserAction;
+            _communicationSystem.BeingActionExecuted += (args) => _virbeActionPlayer.ScheduleNewAction(args);
+            _communicationSystem.UserSpeechRecognized += CallUserSpeechRecognized;
+            _communicationSystem.UiActionExecuted += CallUiAction;
+            _communicationSystem.CustomActionExecuted += CallCustomAction;
+            _communicationSystem.BehaviourActionExecuted += CallbehaviourAction;
+            _communicationSystem.EngineEventExecuted += CallEngineEvent;
+            _communicationSystem.SignalExecuted += CallSignal;
+            _communicationSystem.NamedActionExecuted += CallNamedAction;
+            return true;
         }
 
         public void StartNewConversationWithUserSession(string endUserId, string roomId) => RestoreConversation(endUserId, roomId).Forget();
@@ -147,6 +184,11 @@ namespace Virbe.Core
 
         public void UserHasApproached(bool createNewEndUser = false)
         {
+            if (!_initialized)
+            {
+                _logger.Log("Being not initialized");
+                return;
+            }
             if (CanChangeBeingState(Behaviour.Focused))
             {
                 if (createNewEndUser && _currentState._behaviour == Behaviour.Idle)
@@ -224,6 +266,11 @@ namespace Virbe.Core
 
         public void SendSpeechBytes(float[] recordedAudio, bool streamed)
         {
+            if (!_initialized)
+            {
+                _logger.Log("Being not initialized");
+                return;
+            }
             if (recordedAudio == null)
             {
                 _logger.Log("Cannot send empty speech bytes");
@@ -252,16 +299,17 @@ namespace Virbe.Core
 
         public void SendNamedAction(string name, string value = null)
         {
+            if (!_initialized)
+            {
+                _logger.Log("Being not initialized");
+                return;
+            }
             if (string.IsNullOrEmpty(name))
             {
                 _logger.Log("Cannot send empty NamedAction");
                 return;
             }
-
-            if (ApiBeingConfig.HasRoom)
-            {
-                _communicationSystem.SendNamedAction(name, value).Forget();
-            }
+            _communicationSystem.SendNamedAction(name, value).Forget();
         }
 
         public void SubmitInput(string submitPayload, string storeKey, string storeValue)
@@ -271,6 +319,11 @@ namespace Virbe.Core
 
         public void SendText(string capturedUtterance)
         {
+            if (!_initialized)
+            {
+                _logger.Log("Being not initialized");
+                return;
+            }
             _communicationSystem.SendText(capturedUtterance).Forget();
         }
 
@@ -281,6 +334,11 @@ namespace Virbe.Core
 
         private async UniTask RestoreConversation(string endUserId, string roomId)
         {
+            if (!_initialized)
+            {
+                _logger.Log("Being not initialized");
+                return;
+            }
             await _communicationSystem.InitializeWith(endUserId, roomId);
             ConversationStarted?.Invoke();
         }
@@ -391,25 +449,66 @@ namespace Virbe.Core
             }
         }
 
-        public void CallUserAction(UserAction userAction)
-        {
-            _currentState.lastUserAction = userAction;
-            onUserAction?.Invoke(userAction);
-            OnUserAction?.Invoke(userAction);
-        }
-
-        public void CallBeingActionStarted(BeingAction beingAction)
+        internal void CallBeingActionStarted(BeingAction beingAction)
         {
             ChangeBeingState(Behaviour.PlayingBeingAction);
 
             _currentState.lastBeingAction = beingAction;
-            onBeingAction?.Invoke(beingAction);
             OnBeingAction?.Invoke(beingAction);
+            onBeingAction?.Invoke(beingAction);
         }
 
-        public void CallBeingActionEnded(BeingAction beingAction)
+        internal void CallBeingActionEnded(BeingAction beingAction)
         {
             ChangeBeingState(Behaviour.InConversation);
+        }
+
+        private void CallUserSpeechRecognized(string text)
+        {
+            UserSpeechRecognized?.Invoke(text);
+            userSpeechRecognized?.Invoke(text);
+        }
+
+        private void CallUserAction(UserAction userAction)
+        {
+            _currentState.lastUserAction = userAction;
+            OnUserAction?.Invoke(userAction);
+            onUserAction?.Invoke(userAction);
+        }
+        private void CallNamedAction(NamedAction action)
+        {
+            OnNamedAction?.Invoke(action);
+            onNamedAction?.Invoke(action);
+        }
+
+        private void CallSignal(Signal signal)
+        {
+            OnSignal?.Invoke(signal);
+            onSignal?.Invoke(signal);
+        }
+
+        private void CallEngineEvent(EngineEvent @event)
+        {
+            OnEngineEvent?.Invoke(@event);
+            onEngineEvent?.Invoke(@event);
+        }
+
+        private void CallbehaviourAction(VirbeBehaviorAction action)
+        {
+            OnBehaviourAction?.Invoke(action);
+            onBehaviourAction?.Invoke(action);
+        }
+
+        private void CallCustomAction(CustomAction action)
+        {
+            OnCustomAction?.Invoke(action);
+            onCustomAction?.Invoke(action);
+        }
+
+        private void CallUiAction(VirbeUiAction action)
+        {
+            OnUiAction?.Invoke(action);
+            onUiAction?.Invoke(action);
         }
     }
 }
