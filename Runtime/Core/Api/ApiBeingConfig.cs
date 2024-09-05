@@ -2,7 +2,7 @@ using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 
-namespace Virbe.Core
+namespace Virbe.Core.Data
 {
     [Serializable]
     public class ApiBeingConfig: IApiBeingConfig
@@ -20,8 +20,6 @@ namespace Virbe.Core
             ttsConfig = new TtsConfig();
             host = new HostConfig();
         }
-        string IApiBeingConfig.BaseUrl => !string.IsNullOrEmpty(room?.roomUrl) ? new Uri(room?.roomUrl).GetLeftPart(UriPartial.Authority) : null;
-        bool IApiBeingConfig.HasRoom => room != null;
         EngineType IApiBeingConfig.ConversationEngine => EngineType.Room;
 
         TTSData IApiBeingConfig.FallbackTTSData => _ttsData;
@@ -42,12 +40,7 @@ namespace Virbe.Core
         {
             if (room != null)
             {
-                var supportedPayloads = new List<SupportedPayload>()
-                    {
-                        SupportedPayload.RoomMessage,
-                        SupportedPayload.SpeechAudio,
-                    };
-                var roomHandler = new RoomData(room?.roomApiAccessKey, room?.roomUrl, supportedPayloads, ConnectionProtocol.http, location.id, room?.roomUrl);
+                var roomHandler = new RoomData(room?.roomApiAccessKey, room?.roomUrl, ConnectionProtocol.http, location.id, room?.roomUrl);
                 _conversationData.Add(roomHandler);
             }
 

@@ -1,13 +1,12 @@
 using JetBrains.Annotations;
 using Virbe.Core.Custom;
-using Virbe.Core.Actions;
 using Virbe.Core.Speech;
+using System;
+using System.Collections.Generic;
+using Virbe.Core.Data;
 
-namespace Plugins.Virbe.Core.Api
+namespace Virbe.Core.RoomApi
 {
-    using System;
-    using System.Collections.Generic;
-
     public static class RoomDto
     {
         [Serializable]
@@ -115,7 +114,7 @@ namespace Plugins.Virbe.Core.Api
         [Serializable]
         public class BeingVoiceData
         {
-            public List<BeingAction.Mark> marks;
+            public List<Mark> marks;
             public byte[] data;
         }
 

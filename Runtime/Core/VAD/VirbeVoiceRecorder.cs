@@ -30,7 +30,7 @@ namespace Virbe.Core.VAD
         [Header("(Optional) Where to play a user recorded speech")]
         [SerializeField] private AudioSource userSpeechAudioSource;
 
-        private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(RoomCommunicationHandler));
+        private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(VirbeVoiceRecorder));
 
         private float _recordingStartTime;
         private float _recordingStopRequestedTime;

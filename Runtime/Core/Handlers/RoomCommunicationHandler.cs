@@ -1,23 +1,23 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
-using Plugins.Virbe.Core.Api;
 using Virbe.Core.Actions;
-using Virbe.Core.Api;
+using Virbe.Core.Data;
 using Virbe.Core.Logger;
-using static Virbe.Core.CommunicationSystem;
+using Virbe.Core.RoomApi;
+using static Virbe.Core.Handlers.CommunicationSystem;
 
-namespace Virbe.Core
+namespace Virbe.Core.Handlers
 {
     internal sealed class RoomCommunicationHandler: ICommunicationHandler
     {
-        public event Action<TTSProcessingArgs> RequestTTSProcessing;
         bool ICommunicationHandler.Initialized => _initialized;
 
         private VirbeUserSession _currentUserSession;
         private bool _initialized;
-        private RequestActionType _definedActions =
+        public readonly RequestActionType DefinedActions =
             RequestActionType.SendText |
             RequestActionType.SendNamedAction |
             RequestActionType.SendAudio;
@@ -36,11 +36,6 @@ namespace Virbe.Core
             _poolingInterval = interval;
             _roomData = data;
             _callActionToken = actionToken;
-            var sendingAudio = data.SupportedPayloads.Contains(SupportedPayload.SpeechAudio);
-            if (!sendingAudio)
-            {
-                _definedActions = RequestActionType.SendText | RequestActionType.SendNamedAction;
-            }
         }
 
         bool ICommunicationHandler.HasCapability(RequestActionType type) => HasCapability(type);
@@ -75,7 +70,7 @@ namespace Virbe.Core
             _initialized = true;
         }
 
-        private bool HasCapability(RequestActionType type) => (_definedActions & type) == type;
+        private bool HasCapability(RequestActionType type) => (DefinedActions & type) == type;
 
         internal void StartCommunication()
         {
@@ -185,22 +180,17 @@ namespace Virbe.Core
                         if (message.participantType == "EndUser")
                         {
                             await UniTask.SwitchToMainThread();
-                            _callActionToken.UserActionFired?.Invoke(new UserAction(message.action?.text?.text));
+                            _callActionToken.UserActionExecuted?.Invoke(new UserAction(message.action?.text?.text));
                             await UniTask.SwitchToTaskPool();
                         }
                         else if (message.participantType == "Api" || message.participantType == "User")
                         {
                             try
                             {
-                                if (_roomData.SupportedPayloads.Contains(SupportedPayload.SpeechAudio))
+                                var voiceResult = await _roomApiService.GetRoomMessageVoiceData(message);
+                                if (voiceResult != null)
                                 {
-                                    var voiceResult = await _roomApiService.GetRoomMessageVoiceData(message);
-                                    ProcessResponse(message, voiceResult);
-                                }
-                                else if(!string.IsNullOrEmpty(messageText))
-                                {
-                                    var args = new TTSProcessingArgs(messageText, Guid.NewGuid(), message?.action?.text?.language, null, (data) => ProcessResponse(message, data));
-                                    RequestTTSProcessing?.Invoke(args);
+                                    ProcessResponse(message, voiceResult.marks, voiceResult.data);
                                 }
                             }
                             catch (Exception e)
@@ -217,20 +207,25 @@ namespace Virbe.Core
             }
         }
 
-        private void ProcessResponse(RoomDto.RoomMessage message, RoomDto.BeingVoiceData voiceData)
+        private void ProcessResponse(RoomDto.RoomMessage message, VoiceData voiceData)
         {
             if (voiceData != null)
             {
-                var action = new BeingAction
-                {
-                    text = message?.action?.text?.text,
-                    speech = voiceData?.data,
-                    marks = voiceData?.marks,
-                    cards = message?.action?.uiAction?.value?.cards,
-                    buttons = message?.action?.uiAction?.value?.buttons,
-                };
-                _callActionToken.BeingActionFired?.Invoke(action);
+                ProcessResponse(message, voiceData.Marks, voiceData?.Data);
             }
+        }
+
+        private void ProcessResponse(RoomDto.RoomMessage message, List<Mark> marks, byte[] data)
+        {
+            var action = new BeingAction
+            {
+                text = message?.action?.text?.text,
+                speech = data,
+                marks = marks,
+                cards = message?.action?.uiAction?.value?.cards,
+                buttons = message?.action?.uiAction?.value?.buttons,
+            };
+            _callActionToken.BeingActionExecuted?.Invoke(action);
         }
 
         void IDisposable.Dispose()
@@ -243,7 +238,7 @@ namespace Virbe.Core
             _roomApiService = null;
         }
 
-        async UniTask ICommunicationHandler.MakeAction(RequestActionType type, params object[] args)
+        async Task ICommunicationHandler.MakeAction(RequestActionType type, params object[] args)
         {
             if (!_initialized)
             {

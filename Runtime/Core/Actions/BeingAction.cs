@@ -1,10 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using JetBrains.Annotations;
 using Newtonsoft.Json.Linq;
-using UnityEngine;
 using Virbe.Core.Custom;
+using Virbe.Core.Data;
 using Virbe.Core.Emotions;
 using Virbe.Core.Gestures;
 
@@ -20,38 +19,24 @@ namespace Virbe.Core.Actions
         public List<Card> cards;
 
         public Custom custom;
-        
-        // public static readonly int channels = 1;
-        // public static readonly int samples = 4; // 16 bit sample per byte (8 bit)
-        // public static readonly int frequency = 22050;
 
         public bool HasAudio()
         {
             return speech != null;
         }
 
-        public float GetAudioLength(IApiBeingConfig beingConfig)
+        public float GetAudioLength(TTSData data)
         {
-            return speech?.Length > 0
-                ? ((float)speech.Length) / beingConfig.FallbackTTSData.AudioChannels / (beingConfig.FallbackTTSData.AudioSampleBits / 8f) /
-                  beingConfig.FallbackTTSData.AudioFrequency
-                : 0;
+            return speech?.Length > 0 ? ((float)speech.Length) / data.AudioChannels / (data.AudioSampleBits / 8f) /data.AudioFrequency: 0;
         }
 
         [Serializable]
-        public class Mark
-        {
-            public string type;
-            public int time;
-            public string value;
-        }
-        [Serializable]
         public class Custom
         {
-            [CanBeNull] public string payload;
-            [CanBeNull] public string action;
-            [CanBeNull] public string language;
-            [CanBeNull] public JToken data;
+            public string payload;
+            public string action;
+            public string language;
+            public JToken data;
 
             public List<Emotion> ExtractVirbeEmotion()
             {
@@ -71,7 +56,7 @@ namespace Virbe.Core.Actions
                 }
                 catch (Exception)
                 {
-                    Debug.Log("Cannot parse response");
+                   // Debug.Log("Cannot parse response");
                 }
 
                 return null;
@@ -95,7 +80,7 @@ namespace Virbe.Core.Actions
                 }
                 catch (Exception)
                 {
-                    Debug.Log("Cannot parse response");
+                    //Debug.Log("Cannot parse response");
                 }
 
                 return null;
@@ -119,7 +104,7 @@ namespace Virbe.Core.Actions
                 }
                 catch (Exception)
                 {
-                    Debug.Log("Cannot parse response");
+                    //Debug.Log("Cannot parse response");
                 }
 
                 return null;
@@ -144,7 +129,7 @@ namespace Virbe.Core.Actions
                 }
                 catch (Exception)
                 {
-                    Debug.Log("Cannot parse response");
+                    //Debug.Log("Cannot parse response");
                 }
 
                 return null;

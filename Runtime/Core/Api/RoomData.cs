@@ -1,18 +1,20 @@
-﻿using Plugins.Virbe.Core.Api;
-using System;
-using System.Collections.Generic;
+﻿using Virbe.Core.Data;
+using Virbe.Core.RoomApi;
 
 namespace Virbe.Core
 {
     public class RoomData: ConversationData
     {
         public string RoomUrl { get; }
+        internal string ApiAccessKey { get; }
+
         private string _locationId;
 
-        public RoomData(string roomApiAccessKey, string roomUrl, List<SupportedPayload> supportedPayloads, ConnectionProtocol connectionProtocol, string locationId, string path) : base(roomApiAccessKey, supportedPayloads, connectionProtocol, path)
+        public RoomData(string roomApiAccessKey, string roomUrl, ConnectionProtocol connectionProtocol, string locationId, string path) : base( connectionProtocol, path)
         {
             RoomUrl = roomUrl;
             _locationId = locationId;
+            ApiAccessKey = roomApiAccessKey;
         }
 
         internal RoomApiService CreateRoomObject(string endUserId) =>
