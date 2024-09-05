@@ -1,8 +1,6 @@
 using System;
 using UnityEngine;
-using UnityEngine.Events;
 using Virbe.Core;
-using Virbe.Core.Api;
 using Virbe.Core.Custom;
 using Virbe.UI.Components.BottomBar;
 using Virbe.UI.Components.ProductCard;

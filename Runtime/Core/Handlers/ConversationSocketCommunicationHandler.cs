@@ -7,14 +7,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
 using Newtonsoft.Json;
-using Plugins.Virbe.Core.Api;
 using Virbe.Core.Actions;
-using Virbe.Core.Api;
 using Virbe.Core.Custom;
+using Virbe.Core.Data;
 using Virbe.Core.Logger;
-using static Virbe.Core.CommunicationSystem;
+using static Virbe.Core.Handlers.CommunicationSystem;
 
-namespace Virbe.Core
+namespace Virbe.Core.Handlers
 {
     internal sealed class ConversationSocketCommunicationHandler : ICommunicationHandler
     {
@@ -30,7 +29,7 @@ namespace Virbe.Core
         private const string StateChanged = "state";
 
         bool ICommunicationHandler.Initialized => _initialized;
-        private readonly RequestActionType _definedActions = RequestActionType.SendAudioStream | RequestActionType.SendText;
+        public readonly RequestActionType DefinedActions = RequestActionType.SendAudioStream | RequestActionType.SendText;
 
         private bool _initialized;
         private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(ConversationSocketCommunicationHandler));
@@ -44,22 +43,22 @@ namespace Virbe.Core
         private string _baseUrl;
         private ActionToken _actionToken;
         private VirbeUserSession _currentSession;
-        private List<SupportedPayload> _supportedPayloads;
         private ConnectionType _connectionType;
         private Action _additionalDisposeAction;
+        private Action<Dictionary<string, string>> _updateHeader;
         private ConcurrentQueue<SpeechChunk> _speechChunks = new ConcurrentQueue<SpeechChunk>();
+
         internal ConversationSocketCommunicationHandler(string baseUrl, ConversationData data, ActionToken actionToken, ConnectionType connectionType)
         {
             _baseUrl = baseUrl;
             _data = data;
-            _supportedPayloads = data.SupportedPayloads;
             _actionToken = actionToken;
             _connectionType = connectionType;
         }
 
         bool ICommunicationHandler.HasCapability(RequestActionType type)
         {
-            return (_definedActions & type) == type;
+            return (DefinedActions & type) == type;
         }
 
         Task ICommunicationHandler.Prepare(VirbeUserSession session)
@@ -69,11 +68,30 @@ namespace Virbe.Core
             return ConnectToSocket();
 
         }
+
+        Task ICommunicationHandler.MakeAction(RequestActionType type, params object[] args)
+        {
+            if (type == RequestActionType.SendAudioStream)
+            {
+                SendSpeech(args[0] as byte[]);
+            }
+            else if (type == RequestActionType.SendText)
+            {
+                SendText(args[0] as string).Forget();
+            }
+            return Task.CompletedTask;
+        }
+
         internal void StartSendingSpeech() => StartSpeech().Forget();
 
         internal void StopSendingSpeech() => StopSpeech().Forget();
 
         internal void SetAdditionalDisposeAction(Action callback) => _additionalDisposeAction = callback;
+
+        internal void SetHeaderUpdate(Action<Dictionary<string,string>> updateHeaderAction)
+        {
+            _updateHeader = updateHeaderAction;
+        }
 
         private void CloseSocket()
         {
@@ -140,6 +158,11 @@ namespace Virbe.Core
             _socketClient = new SocketIOClient.SocketIO(_baseUrl);
             _socketClient.Options.EIO = SocketIO.Core.EngineIO.V4;
             _socketClient.Options.Path = _data.Path;
+            if(_socketClient.Options.ExtraHeaders == null)
+            {
+                _socketClient.Options.ExtraHeaders = new Dictionary<string, string>();
+            }
+            _updateHeader?.Invoke(_socketClient.Options.ExtraHeaders);
 
             _currentSttResult.Clear();
 
@@ -161,18 +184,22 @@ namespace Virbe.Core
 
             _socketClient.On(StateChanged, (response) =>
             {
-                _logger.Log($"[{DateTime.Now}]Conversation state changed : {response}");
+                _logger.Log($"[{DateTime.Now}] Conversation state changed : {response}");
                 var responseMessage = response.ToString();
                 var state = JsonConvert.DeserializeObject<List<StateMessage>>(responseMessage);
-                if (state.FirstOrDefault()?.IndicateInitialization == true)
-                {
-                    _logger.Log($"Conversation initialized");
+            });
 
-                    if (_connectionType == ConnectionType.Continous)
-                    {
-                        StartSpeech().Forget();
-                    }
+            _socketClient.On(ConversationInitialize, (response) => 
+            {
+                _logger.Log($"[{DateTime.Now}]Conversation initialized");
+
+                if (_connectionType == ConnectionType.Continous)
+                {
+                    StartSpeech().Forget();
                 }
+                var responseMessage = response.ToString();
+                var conversation = JsonConvert.DeserializeObject<ConversationStartResponse>(responseMessage);
+                _currentSession.UpdateSession(_currentSession.UserId, conversation.conversation.Id);
             });
 
             _socketClient.OnConnected += (sender, args) => OnConnected().Forget();
@@ -193,7 +220,7 @@ namespace Virbe.Core
 
         private async UniTaskVoid OnConnected()
         {
-            _logger.Log($"Connected to the socket .");
+            _logger.Log($"Connected to the socket.");
             await InitializeConversation();
         }
 
@@ -213,6 +240,7 @@ namespace Virbe.Core
 
         private async Task InitializeConversation()
         {
+            _logger.Log($"Initializing conversation.");
             var conversationId = _currentSession.ConversationId ?? Guid.Empty.ToString();
             if (string.IsNullOrEmpty(_currentSession.UserId))
             {
@@ -237,27 +265,64 @@ namespace Virbe.Core
         private void HandleConversationMessage(string responseJson)
         {
             var messages = JsonConvert.DeserializeObject<List<ConversationMessage>>(responseJson);
-            var roomMessage = messages.FirstOrDefault();
-            var messageText = roomMessage?.Action?.Text?.Text;
+            var message = messages.FirstOrDefault();
+            var messageText = message?.Action?.Text?.Text;
 
             if (!string.IsNullOrEmpty(messageText))
             {
-                _logger.Log($"Got message [{roomMessage.ParticipantType}]:{messageText}");
+                _logger.Log($"Got message [{message.ParticipantType}]:{messageText}");
             }
-            if (roomMessage.ParticipantType == "EndUser")
+
+            if (message.ParticipantType == "EndUser")
             {
-                _actionToken.UserActionFired?.Invoke(new UserAction(messageText));
+                _actionToken.UserActionExecuted?.Invoke(new UserAction(messageText));
+                return;
             }
-            else if ((roomMessage.ParticipantType == "Api" || roomMessage.ParticipantType == "User") && !string.IsNullOrEmpty(messageText))
+
+            if (message.ParticipantType == "Api" || message.ParticipantType == "User")
             {
-                var guid = Guid.NewGuid();
-                var ttsProcessingArgs = new TTSProcessingArgs(messageText, guid, roomMessage?.Action?.Text?.Language, null, (data) => ProcessResponse(guid, data));
-                _speechChunks.Enqueue(new SpeechChunk(ttsProcessingArgs, roomMessage));
-                RequestTTSProcessing?.Invoke(ttsProcessingArgs);
+                CallEventsForNonEmptyActions(message);
+
+                if (!string.IsNullOrEmpty(messageText))
+                {
+                    var guid = Guid.NewGuid();
+
+                    var ttsProcessingArgs = new TTSProcessingArgs(messageText, guid, message?.Action?.Text?.Language, null, (data) => ProcessResponse(guid, data));
+                    _speechChunks.Enqueue(new SpeechChunk(ttsProcessingArgs, message));
+                    RequestTTSProcessing?.Invoke(ttsProcessingArgs);
+                }
             }
         }
 
-        private void ProcessResponse(Guid guid, RoomDto.BeingVoiceData voiceData)
+        private void CallEventsForNonEmptyActions(ConversationMessage message)
+        {
+            if (message.Action.CustomAction != null)
+            {
+                _actionToken?.CustomActionExecuted(message.Action.CustomAction);
+            }
+            if (message.Action.UiAction != null)
+            {
+                _actionToken?.UiActionExecuted(message.Action.UiAction);
+            }
+            if (message.Action.BehaviorAction != null)
+            {
+                _actionToken?.BehaviourActionExecuted(message.Action.BehaviorAction);
+            }
+            if (message.Action.NamedAction != null)
+            {
+                _actionToken?.NamedActionExecuted(message.Action.NamedAction);
+            }
+            if (message.Action.Signal != null)
+            {
+                _actionToken?.SignalExecuted(message.Action.Signal);
+            }
+            if (message.Action.EngineEvent != null)
+            {
+                _actionToken?.EngineEventExecuted(message.Action.EngineEvent);
+            }
+        }
+
+        private void ProcessResponse(Guid guid, VoiceData voiceData)
         {
             if (voiceData == null)
             {
@@ -282,22 +347,23 @@ namespace Virbe.Core
                     var cards = new List<Card>();
                     foreach (var cardItem in result.Message?.Action?.UiAction?.Value?.Cards ?? new List<VirbeCard>())
                     {
-                        cards.Add(cardItem.ToOldCard());
+                        cards.Add( new Card() { Title = cardItem.Title, Payload = cardItem.Payload, PayloadType = cardItem.PayloadType });
                     }
                     var buttons = new List<Button>();
-                    foreach (var cardItem in result.Message?.Action?.UiAction?.Value?.Buttons ?? new List<VirbeButton>())
+                    foreach (var buttonItem in result.Message?.Action?.UiAction?.Value?.Buttons ?? new List<VirbeButton>())
                     {
-                        cards.Add(cardItem.ToOldButton());
+                        buttons.Add(new Button() { Title = buttonItem.Label, Payload = buttonItem.Payload, PayloadType = buttonItem.PayloadType});
                     }
+
                     var action = new BeingAction
                     {
                         text = result.Message?.Action?.Text?.Text,
-                        speech = result.VoiceData?.data,
-                        marks = result.VoiceData?.marks,
+                        speech = result.VoiceData?.Data,
+                        marks = result.VoiceData?.Marks,
                         cards = cards,
                         buttons = buttons,
                     };
-                    _actionToken.BeingActionFired?.Invoke(action);
+                    _actionToken.BeingActionExecuted?.Invoke(action);
                 }
             }
         }
@@ -320,24 +386,12 @@ namespace Virbe.Core
             _additionalDisposeAction?.Invoke();
         }
 
-        UniTask ICommunicationHandler.MakeAction(RequestActionType type, params object[] args)
-        {
-            if (type == RequestActionType.SendAudioStream)
-            {
-                SendSpeech(args[0] as byte[]);
-            }
-            else if(type == RequestActionType.SendText)
-            {
-                SendText(args[0] as string).Forget();
-            }
-            return UniTask.CompletedTask;
-        }
 
         private class SpeechChunk
         {
             public TTSProcessingArgs ProcessingArgs { get; }
             public ConversationMessage Message { get; }
-            public RoomDto.BeingVoiceData VoiceData { get; set; }
+            public VoiceData VoiceData { get; set; }
 
             public SpeechChunk(TTSProcessingArgs args, ConversationMessage message)
             {
@@ -384,8 +438,12 @@ namespace Virbe.Core
         {
             public string previous { get; set; }
             public string current { get; set; }
-
-            public bool IndicateInitialization => previous == "socket" && current == "initialized";
         }
+
+        private class ConversationStartResponse
+        {
+            public Conversation conversation { get; set; }
+            public List<ConversationMessage> messages { get; set; }
+}
     }
 }

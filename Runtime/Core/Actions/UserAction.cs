@@ -1,5 +1,4 @@
 using System;
-using Virbe.Core.Api;
 
 namespace Virbe.Core.Actions
 {

@@ -1,13 +1,13 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
-using Virbe.Core.Api;
-using Virbe.Core.Logger;
+using Virbe.Core.Data;
 
-namespace Virbe.Core
+namespace Virbe.Core.Handlers
 {
     internal sealed class STTSocketCommunicationHandler: ICommunicationHandler
     {
@@ -17,10 +17,10 @@ namespace Virbe.Core
         private const string SpeechAudio = "speech-audio";
         private const string SpeechRecognized = "speech-recognized";
 
-        private readonly RequestActionType _definedActions = RequestActionType.SendAudioStream;
+        public readonly RequestActionType DefinedActions = RequestActionType.SendAudioStream;
 
         private bool _initialized;
-        private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(STTSocketCommunicationHandler));
+        private readonly ILogger _logger;
         private SocketIOClient.SocketIO _socketSttClient;
         private ConcurrentQueue<byte[]> _speechBytesAwaitingSend = new ConcurrentQueue<byte[]>();
         private StringBuilder _currentSttResult = new StringBuilder();
@@ -31,24 +31,40 @@ namespace Virbe.Core
 
         private STTData _data;
         private Action _additionalDisposeAction;
+        private Action<Dictionary<string, string>> _updateHeader;
 
         private string _baseUrl;
 
-        internal STTSocketCommunicationHandler(string baseUrl, STTData data)
+        internal STTSocketCommunicationHandler(string baseUrl, STTData data, ILogger logger = null)
         {
             _baseUrl = baseUrl;
             _data = data;
+            _logger = logger;
         }
 
         bool ICommunicationHandler.HasCapability(RequestActionType type)
         {
-            return (_definedActions & type) == type;
+            return (DefinedActions & type) == type;
         }
 
         Task ICommunicationHandler.Prepare(VirbeUserSession session)
         {
             _initialized = true;
             return Task.CompletedTask;
+        }
+
+        Task ICommunicationHandler.MakeAction(RequestActionType type, params object[] args)
+        {
+            if (type == RequestActionType.SendAudioStream)
+            {
+                SendSpeech(args[0] as byte[]);
+            }
+            return Task.CompletedTask;
+        }
+
+        internal void SetHeaderUpdate(Action<Dictionary<string,string>> updateHeaderAction)
+        {
+            _updateHeader = updateHeaderAction;
         }
 
         internal void OpenSocket()
@@ -114,6 +130,11 @@ namespace Virbe.Core
             _socketSttClient = new SocketIOClient.SocketIO(_baseUrl);
             _socketSttClient.Options.EIO = SocketIO.Core.EngineIO.V4;
             _socketSttClient.Options.Path = _data.Path;
+            if(_socketSttClient.Options.ExtraHeaders == null)
+            {
+                _socketSttClient.Options.ExtraHeaders = new Dictionary<string, string>();
+            }
+            _updateHeader?.Invoke(_socketSttClient.Options.ExtraHeaders);
             _currentSttResult.Clear();
 
             _logger.Log($"Try connecting to socket.io endpoint");
@@ -126,10 +147,6 @@ namespace Virbe.Core
             _socketSttClient.On(SpeechRecognized, (response) =>
             {
                 _logger.Log($"[{DateTime.Now}] Recognized text: {response}");
-                //JArray jsonArray = JArray.Parse(response.ToString());
-                //string result = (string)jsonArray[0]["text"];
-                //_logger.Log($"[{DateTime.Now}] Recognized text: {result}");
-                //_currentSttResult.Append(result);
             });
 
 
@@ -189,13 +206,5 @@ namespace Virbe.Core
             CloseSocket();
         }
 
-        UniTask ICommunicationHandler.MakeAction(RequestActionType type, params object[] args)
-        {
-            if(type == RequestActionType.SendAudioStream)
-            {
-                SendSpeech(args[0] as byte[]);
-            }
-            return UniTask.CompletedTask;
-        }
     }
 }

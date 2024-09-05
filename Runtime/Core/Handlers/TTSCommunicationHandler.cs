@@ -6,29 +6,35 @@ using System.Text;
 using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
 using Newtonsoft.Json;
-using Plugins.Virbe.Core.Api;
-using Virbe.Core.Actions;
-using Virbe.Core.Api;
+using Virbe.Core.Data;
 using Virbe.Core.Logger;
 
-namespace Virbe.Core
+namespace Virbe.Core.Handlers
 {
     internal sealed class TTSCommunicationHandler : ICommunicationHandler
     {
         bool ICommunicationHandler.Initialized => _initialized;
-        private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(TTSCommunicationHandler));
+        private readonly Virbe.Core.ILogger _logger;
 
         private readonly Dictionary<string, string> _headers = new Dictionary<string, string>();
+        private Action<Dictionary<string, string>> _updateHeader;
+
         private readonly TTSData _data;
-        private readonly string _endpoint;
-        private RequestActionType _definedActions = RequestActionType.ProcessTTS;
+        private readonly Uri _endpoint;
+        public readonly RequestActionType DefinedActions = RequestActionType.ProcessTTS;
         private bool _initialized;
 
-        internal TTSCommunicationHandler(string baseUrl, TTSData data, string locationId)
+        internal TTSCommunicationHandler(string baseUrl, TTSData data, string locationId, Virbe.Core.ILogger logger = null)
         {
+            _logger = logger;
             _data = data;
-            _endpoint = baseUrl;
+            _endpoint = new Uri(baseUrl);
             _headers.Add("Virbe-Location-Id", locationId);
+        }
+
+        internal void SetHeaderUpdate(Action<Dictionary<string, string>> updateHeaderAction)
+        {
+            _updateHeader = updateHeaderAction;
         }
 
         void IDisposable.Dispose()
@@ -36,9 +42,9 @@ namespace Virbe.Core
             _initialized = false;
         }
 
-        bool ICommunicationHandler.HasCapability(RequestActionType type) => (_definedActions & type) == type;
+        bool ICommunicationHandler.HasCapability(RequestActionType type) => (DefinedActions & type) == type;
 
-        async UniTask ICommunicationHandler.MakeAction(RequestActionType type, params object[] args)
+        async Task ICommunicationHandler.MakeAction(RequestActionType type, params object[] args)
         {
             if (type == RequestActionType.ProcessTTS)
             {
@@ -48,12 +54,12 @@ namespace Virbe.Core
                     _logger.Log($"TTS processing : \"{textToProcess}\"");
 
                     var resultData = await ProcessText(textToProcess);
-                    var voiceData = new RoomDto.BeingVoiceData()
+                    var voiceData = new VoiceData()
                     {
-                        marks = resultData.marks,
-                        data = resultData.speech,
+                        Marks = resultData.marks,
+                        Data = resultData.speech,
                     };
-                    var action = args[1] as Action<RoomDto.BeingVoiceData>;
+                    var action = args[1] as Action<VoiceData>;
                     _logger.Log($"TTS processed : \"{textToProcess}\"  and propagated response.");
                     action?.Invoke(voiceData);
                 }
@@ -74,7 +80,9 @@ namespace Virbe.Core
         {
             var msg = new RequestMessage() {text = text, language = language, voice = voice };
             var json = JsonConvert.SerializeObject(msg);
-            return await Request<TTSResponseModel>($"{_endpoint}{_data.Path}", HttpMethod.Post, _headers, true, json);
+            _updateHeader?.Invoke(_headers);
+            Uri requestUri = new Uri(_endpoint, _data.Path);
+            return await Request<TTSResponseModel>(requestUri.AbsoluteUri, HttpMethod.Post, _headers, true, json);
         }
 
         private async Task<T> Request<T>(string endpoint, HttpMethod method, Dictionary<string, string> headers, bool ensureSuccess,
@@ -98,21 +106,32 @@ namespace Virbe.Core
                 request.Headers.Add(header.Key, header.Value);
             }
 
-            var response = await httpClient.SendAsync(request);
+            try
+            {
+                var response = await httpClient.SendAsync(request);
 
-            if (ensureSuccess)
-            {
-                response.EnsureSuccessStatusCode();
+                if (ensureSuccess)
+                {
+                    response.EnsureSuccessStatusCode();
+                }
+                else if (response.StatusCode != System.Net.HttpStatusCode.OK)
+                {
+                    return default(T);
+                }
+
+                var responseJson = await response.Content.ReadAsStringAsync();
+                var responseData = JsonConvert.DeserializeObject<T>(responseJson);
+
+                return responseData;
             }
-            else if (response.StatusCode != System.Net.HttpStatusCode.OK)
+            catch (Exception ex)
             {
+                if (ensureSuccess)
+                {
+                    throw;
+                }
                 return default(T);
             }
-
-            var responseJson = await response.Content.ReadAsStringAsync();
-            var responseData = JsonConvert.DeserializeObject<T>(responseJson);
-
-            return responseData;
         }
 
         private class RequestMessage
@@ -123,7 +142,7 @@ namespace Virbe.Core
         }
         private class TTSResponseModel
         {
-            public List<BeingAction.Mark> marks;
+            public List<Mark> marks;
             public byte[] speech;
         }
     }

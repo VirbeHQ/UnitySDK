@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.Assertions;
+using Virbe.Core.Data;
 using Virbe.Core.Gestures;
 using Virbe.Core.Speech;
 
@@ -158,7 +159,7 @@ namespace Virbe.Core.Actions
                 {
                     voiceEndSignalCoroutine =
                         StartCoroutine(
-                            AfterVoicePlayed(beingAction.GetAudioLength(_virbeBeing.ApiBeingConfig), beingAction));
+                            AfterVoicePlayed(beingAction.GetAudioLength(_virbeBeing.ApiBeingConfig.FallbackTTSData), beingAction));
                 }
                 else
                 {

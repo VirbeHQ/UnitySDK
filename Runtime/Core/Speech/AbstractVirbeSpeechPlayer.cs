@@ -5,8 +5,7 @@ using UnityEngine;
 using UnityEngine.Animations;
 using UnityEngine.Playables;
 using Virbe.Core.Actions;
-using Virbe.Core.Api;
-using Virbe.Core.Emotions;
+using Virbe.Core.Data;
 using Virbe.Core.Logger;
 using Virbe.Core.Utils;
 
@@ -38,10 +37,10 @@ namespace Virbe.Core.Speech
         private PlayableGraph playableGraph;
         private AnimationLayerMixerPlayable mixerPlayable;
 
-        private List<BeingAction.Mark> _currentVisemes;
+        private List<Mark> _currentVisemes;
         private int _currentVisemeIndex;
-        private BeingAction.Mark _prevViseme;
-        private BeingAction.Mark _nextViseme;
+        private Mark _prevViseme;
+        private Mark _nextViseme;
         private float _currentSpeechTime;
         private float _speechDuration;
 
@@ -97,7 +96,7 @@ namespace Virbe.Core.Speech
         }
 
 
-        public void Play(List<BeingAction.Mark> marks)
+        public void Play(List<Mark> marks)
         {
             for (int i = 0; i < visemeMappingDict.Length; i++)
             {
@@ -105,7 +104,7 @@ namespace Virbe.Core.Speech
             }
 
             CleanUpPrevVisemes();
-            _speechDuration = AsSeconds(marks.Last().time) + PhonemeFadeTime;
+            _speechDuration = AsSeconds(marks.Last().Time) + PhonemeFadeTime;
             _currentVisemes = marks;
             if (marks.Count > 0)
             {
@@ -131,14 +130,14 @@ namespace Virbe.Core.Speech
             {
                 CleanUpPrevVisemes();
             }
-            else if (_nextViseme != null && _currentSpeechTime > AsSeconds(_nextViseme.time))
+            else if (_nextViseme != null && _currentSpeechTime > AsSeconds(_nextViseme.Time))
             {
                 _currentVisemeIndex++;
                 var nextVisemeCandidate = findNextViseme();
-                if (_prevViseme != null && _nextViseme.value != _prevViseme.value) //do not zero out same viseme
+                if (_prevViseme != null && _nextViseme.Value != _prevViseme.Value) //do not zero out same viseme
                 {
                     // Quick decay would be better
-                    SetAnimationValue(_prevViseme.value, CLEAR_INPUT_VALUE);
+                    SetAnimationValue(_prevViseme.Value, CLEAR_INPUT_VALUE);
                 }
 
 
@@ -146,8 +145,8 @@ namespace Virbe.Core.Speech
                 _nextViseme = nextVisemeCandidate;
             }
 
-            float prevVisemeTime = _prevViseme != null ? AsSeconds(_prevViseme.time) : 0.0f;
-            float nextVisemeTime = _nextViseme != null ? AsSeconds(_nextViseme.time) : _speechDuration;
+            float prevVisemeTime = _prevViseme != null ? AsSeconds(_prevViseme.Time) : 0.0f;
+            float nextVisemeTime = _nextViseme != null ? AsSeconds(_nextViseme.Time) : _speechDuration;
             if ((nextVisemeTime - prevVisemeTime) > PhonemeFadeTime)
                 prevVisemeTime = nextVisemeTime - PhonemeInTime;
 
@@ -172,17 +171,17 @@ namespace Virbe.Core.Speech
             if (_prevViseme != null)
             {
                 // Slow decay would be better
-                VisemeOutUpdate(_prevViseme.value, (progress) * volumeMultiplier);
+                VisemeOutUpdate(_prevViseme.Value, (progress) * volumeMultiplier);
             }
 
             if (_nextViseme != null)
             {
                 // Quick decay would be better
-                VisemeInUpdate(_nextViseme.value, progress * volumeMultiplier);
+                VisemeInUpdate(_nextViseme.Value, progress * volumeMultiplier);
             }
         }
 
-        private BeingAction.Mark findNextViseme()
+        private Mark findNextViseme()
         {
             return _currentVisemeIndex < _currentVisemes.Count ? _currentVisemes[_currentVisemeIndex] : null;
         }

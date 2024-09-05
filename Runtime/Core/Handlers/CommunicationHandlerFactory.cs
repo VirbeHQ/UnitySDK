@@ -2,15 +2,23 @@
 using System;
 using System.Collections.Generic;
 using Virbe.Core.Actions;
-using Virbe.Core.Api;
+using Virbe.Core.Data;
 using Virbe.Core.Logger;
 
-namespace Virbe.Core
+namespace Virbe.Core.Handlers
 {
     internal sealed class CommunicationSystem: IDisposable
     {
-        public event Action<UserAction> UserActionFired;
-        public event Action<BeingAction> BeingActionFired;
+        public event Action<UserAction> UserActionExecuted;
+        //TODO: change card and buttons from BeingAction to ui action
+        public event Action<BeingAction> BeingActionExecuted;
+        public event Action<VirbeUiAction> UiActionExecuted;
+        public event Action<CustomAction> CustomActionExecuted;
+        public event Action<VirbeBehaviorAction> BehaviourActionExecuted;
+        public event Action<EngineEvent> EngineEventExecuted;
+        public event Action<Signal> SignalExecuted;
+        public event Action<NamedAction> NamedActionExecuted;
+
         public event Action<string> UserSpeechRecognized;
 
         public bool Initialized { get; private set; }   
@@ -23,22 +31,31 @@ namespace Virbe.Core
         private VirbeBeing _being;
         private ActionToken _callActionToken;
 
-        public CommunicationSystem(VirbeBeing being)
+        internal CommunicationSystem(VirbeBeing being, string hostUrl, string profileId, string profileSecret, string appIdentifier)
         {
-            //on demand is the fastest as for 07_08_2024
             var connectionType = ConnectionType.OnDemand;
             _apiBeingConfig = being.ApiBeingConfig;
             _being = being;
             _callActionToken = new ActionToken();
-            _callActionToken.UserActionFired += (args) => UserActionFired?.Invoke(args);
-            _callActionToken.BeingActionFired += (args) => BeingActionFired?.Invoke(args);
+            _callActionToken.UserActionExecuted += (args) => UserActionExecuted?.Invoke(args);
+            _callActionToken.BeingActionExecuted += (args) => BeingActionExecuted?.Invoke(args);
             _callActionToken.UserSpeechRecognized += (args) => UserSpeechRecognized?.Invoke(args);
 
+            _callActionToken.UiActionExecuted += (args) => UiActionExecuted?.Invoke(args);
+            _callActionToken.CustomActionExecuted += (args) => CustomActionExecuted?.Invoke(args);
+            _callActionToken.BehaviourActionExecuted += (args) => BehaviourActionExecuted?.Invoke(args);
+            _callActionToken.EngineEventExecuted += (args) => EngineEventExecuted?.Invoke(args);
+            _callActionToken.SignalExecuted += (args) => SignalExecuted?.Invoke(args);
+            _callActionToken.NamedActionExecuted += (args) => NamedActionExecuted?.Invoke(args);
+
+            var endpointCoder = new ApiEndpointCoder(appIdentifier, profileId, profileSecret);
+
+            var supportedActions = new List<RequestActionType>();
             var haveRoom = false;
-            var supportedPayloads = new List<SupportedPayload>();
             foreach (var handler in _apiBeingConfig.ConversationData)
             {
-                if(handler.ConnectionProtocol == ConnectionProtocol.http)
+                //backward compatibility with old API - TODO - remove when fully migrated
+                if(_apiBeingConfig.ConversationEngine == EngineType.Room && handler is RoomData)
                 {
                     var roomData = handler as RoomData;
                     var roomHandler = new RoomCommunicationHandler(roomData, _callActionToken, 500);
@@ -49,14 +66,15 @@ namespace Virbe.Core
                         _being.ConversationStarted -= roomHandler.StartCommunication;
                         _being.ConversationEnded -= roomHandler.EndCommunication;
                     });
-                    roomHandler.RequestTTSProcessing += (args) => ProcessTTS(args).Forget();
 
                     _handlers.Add(roomHandler);
                     haveRoom = true;
+                    supportedActions.Add(roomHandler.DefinedActions);
                 }
-                else if(handler.ConnectionProtocol == ConnectionProtocol.wsEndless)
+                else if(handler.ConnectionProtocol == ConnectionProtocol.socket_io)
                 {
-                  var conversationHandler = new ConversationSocketCommunicationHandler(_apiBeingConfig.BaseUrl, handler, _callActionToken, connectionType);
+                    var conversationHandler = new ConversationSocketCommunicationHandler(hostUrl, handler, _callActionToken, connectionType);
+                    conversationHandler.SetHeaderUpdate(endpointCoder.UpdateHeaders);
                     conversationHandler.RequestTTSProcessing += (args) => ProcessTTS(args).Forget();
                     _handlers.Add(conversationHandler);
                     if(connectionType == ConnectionType.OnDemand)
@@ -69,8 +87,13 @@ namespace Virbe.Core
                             _being.UserStopSpeaking -= conversationHandler.StopSendingSpeech;
                         });
                     }
+                    supportedActions.Add(conversationHandler.DefinedActions);
                 }
-                supportedPayloads.AddRange(handler.SupportedPayloads);
+                else if (handler.ConnectionProtocol == ConnectionProtocol.http)
+                {
+                    //TODO: add rest conversation handler
+                    //supportedActions.Add(conversationHandler.DefinedActions);
+                }
             }
 
             if(_apiBeingConfig.ConversationEngine == EngineType.Room && !haveRoom)
@@ -79,11 +102,12 @@ namespace Virbe.Core
                 return;
             }
 
-            if (!supportedPayloads.Contains(SupportedPayload.SpeechAudio) )
+            if (!supportedActions.Contains(RequestActionType.SendAudio) && !supportedActions.Contains(RequestActionType.SendAudioStream))
             {
                 if(_apiBeingConfig.FallbackSTTData.ConnectionProtocol == ConnectionProtocol.socket_io)
                 {
-                    var socketHandler = new STTSocketCommunicationHandler(_apiBeingConfig.BaseUrl, _apiBeingConfig.FallbackSTTData);
+                    var socketHandler = new STTSocketCommunicationHandler(hostUrl, _apiBeingConfig.FallbackSTTData, new VirbeEngineLogger(nameof(STTSocketCommunicationHandler)));
+                    socketHandler.SetHeaderUpdate(endpointCoder.UpdateHeaders);
                     _being.UserStartSpeaking += socketHandler.OpenSocket;
                     _being.UserStopSpeaking += socketHandler.CloseSocket;
                     socketHandler.SetAdditionalDisposeAction(() =>
@@ -99,11 +123,12 @@ namespace Virbe.Core
                     throw new NotImplementedException();
                 }
             }
-            if(_apiBeingConfig.ConversationEngine != EngineType.Room)
+            if(!supportedActions.Contains(RequestActionType.ProcessTTS))
             {
                 if (_apiBeingConfig.FallbackTTSData.ConnectionProtocol == ConnectionProtocol.http)
                 {
-                    var ttsRestHandler = new TTSCommunicationHandler(_apiBeingConfig.BaseUrl, _apiBeingConfig.FallbackTTSData, _apiBeingConfig.LocationId);
+                    var ttsRestHandler = new TTSCommunicationHandler(hostUrl, _apiBeingConfig.FallbackTTSData, _apiBeingConfig.LocationId, new VirbeEngineLogger(nameof(TTSCommunicationHandler)));
+                    ttsRestHandler.SetHeaderUpdate(endpointCoder.UpdateHeaders);
                     _handlers.Add(ttsRestHandler);
                 }
                 else
@@ -124,7 +149,7 @@ namespace Virbe.Core
                 }
                 catch (Exception _)
                 {
-                    _logger.Log($"Could not initialize {handler.GetType()}");
+                    _logger.LogError($"Could not initialize {handler.GetType()}");
                     return;
                 }
             }
@@ -183,8 +208,8 @@ namespace Virbe.Core
             {
                 handler.Dispose();
             }
-            UserActionFired = null;
-            BeingActionFired = null;
+            UserActionExecuted = null;
+            BeingActionExecuted = null;
             UserSpeechRecognized = null;
             _handlers.Clear();
             Initialized = false;
@@ -192,20 +217,16 @@ namespace Virbe.Core
 
         internal class ActionToken
         {
-            public Action<UserAction> UserActionFired;
-            public Action<BeingAction> BeingActionFired;
+            public Action<UserAction> UserActionExecuted;
+            public Action<BeingAction> BeingActionExecuted;
             public Action<string> UserSpeechRecognized;
+
+            public Action<VirbeUiAction> UiActionExecuted;
+            public Action<CustomAction> CustomActionExecuted;
+            public Action<VirbeBehaviorAction> BehaviourActionExecuted;
+            public Action<EngineEvent> EngineEventExecuted;
+            public Action<Signal> SignalExecuted;
+            public Action<NamedAction> NamedActionExecuted;
         }
-    }
-
-    [Flags]
-    public enum RequestActionType
-    {
-        SendText = 0,
-        SendNamedAction = 1,
-        SendAudio = 2,
-        SendAudioStream = 4,
-
-        ProcessTTS = 8,
     }
 }
