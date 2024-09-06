@@ -71,6 +71,11 @@ namespace Virbe.Core.Handlers
 
         Task ICommunicationHandler.MakeAction(RequestActionType type, params object[] args)
         {
+            if (!_socketClient.Connected)
+            {
+                _logger.Log($"Could not make action {type}, because socket is not connected");
+                return Task.CompletedTask;
+            }
             if (type == RequestActionType.SendAudioStream)
             {
                 SendSpeech(args[0] as byte[]);
@@ -158,12 +163,7 @@ namespace Virbe.Core.Handlers
             _socketClient = new SocketIOClient.SocketIO(_baseUrl);
             _socketClient.Options.EIO = SocketIO.Core.EngineIO.V4;
             _socketClient.Options.Path = _data.Path;
-            if(_socketClient.Options.ExtraHeaders == null)
-            {
-                _socketClient.Options.ExtraHeaders = new Dictionary<string, string>();
-            }
-            _updateHeader?.Invoke(_socketClient.Options.ExtraHeaders);
-
+            _socketClient.Options.Transport = SocketIOClient.Transport.TransportProtocol.WebSocket;
             _currentSttResult.Clear();
 
             _socketClient.On(ConversationMessage, (response) => HandleConversationMessage(response.ToString()));
@@ -207,14 +207,14 @@ namespace Virbe.Core.Handlers
             _socketClient.OnDisconnected += (sender, args) =>
             {
                 _endlessSocketTokenSource?.Cancel();
-                _logger.Log($"Disconnected from the stt socket {args}");
+                _logger.Log($"Disconnected from the conversation socket {args}");
             };
 
             _socketClient.OnError += (sender, args) => _logger.Log($"Socket error: {args}");
 
             _socketClient.On(ConversationError, (response) => _logger.Log($"[{DateTime.Now}]Conversation error occured : {response}"));
 
-            _logger.Log($"Try connecting to socket.io endpoint: {_baseUrl}{_data.Path}");
+            _logger.Log($"Try connecting to conversation socket endpoint: {_baseUrl}{_data.Path}");
             return _socketClient.ConnectAsync(_endlessSocketTokenSource.Token);
         }
 
@@ -252,6 +252,11 @@ namespace Virbe.Core.Handlers
             {
                 msg.conversationId = _currentSession.ConversationId;
             }
+            var dict = new Dictionary<string, string>();
+            _updateHeader?.Invoke(dict);
+            msg.profileId = dict["x-virbe-access-key"];
+            msg.profileAccessSecret = dict["x-virbe-access-secret"];
+
             await _socketClient.EmitAsync(ConversationInitialize, msg);
         }
 
@@ -259,7 +264,6 @@ namespace Virbe.Core.Handlers
         {
             var msg = new SpeachInitMessage() {enableContinuousRecognition = "true", sendResultsToConversationEngine = "true" };
             await _socketClient.EmitAsync(SpeechInitialize, msg);
-            _logger.Log(msg.ToString());
         }
 
         private void HandleConversationMessage(string responseJson)
@@ -414,6 +418,8 @@ namespace Virbe.Core.Handlers
         }
         private class InitializeMessage
         {
+            public string profileId { get; set; }
+            public string profileAccessSecret { get; set; }
             public string endUserId { get; set; }
             public string conversationId { get; set; }
 

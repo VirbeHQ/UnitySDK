@@ -26,10 +26,23 @@ namespace Virbe.Core
             else
             {
                 var oldConfig = JsonConvert.DeserializeObject<ApiBeingConfig>(configJson);
+                if(oldConfig?.location == null)
+                {
+                    throw new Exception($"[VIRBE] Could not parse json to config: json {configJson}");
+                }
                 oldConfig.Initialize();
                 return oldConfig;
             }
             throw new Exception("[VIRBE] Could not parse json to config");
+        }
+
+        public static bool TryCreateUrlAddress(string url, out Uri address)
+        {
+            if (Uri.TryCreate(url, UriKind.Absolute, out address))
+            {
+                return (address.Scheme == Uri.UriSchemeHttp || address.Scheme == Uri.UriSchemeHttps);
+            }
+            return false;
         }
 
         private enum SchemaVersion
