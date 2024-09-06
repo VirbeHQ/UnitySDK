@@ -130,14 +130,16 @@ namespace Virbe.Core.Handlers
             _socketSttClient = new SocketIOClient.SocketIO(_baseUrl);
             _socketSttClient.Options.EIO = SocketIO.Core.EngineIO.V4;
             _socketSttClient.Options.Path = _data.Path;
-            if(_socketSttClient.Options.ExtraHeaders == null)
-            {
-                _socketSttClient.Options.ExtraHeaders = new Dictionary<string, string>();
-            }
-            _updateHeader?.Invoke(_socketSttClient.Options.ExtraHeaders);
+            _socketSttClient.Options.Transport = SocketIOClient.Transport.TransportProtocol.WebSocket;
+
+            //if(_socketSttClient.Options.ExtraHeaders == null)
+            //{
+            //    _socketSttClient.Options.ExtraHeaders = new Dictionary<string, string>();
+            //}
+            //_updateHeader?.Invoke(_socketSttClient.Options.ExtraHeaders);
             _currentSttResult.Clear();
 
-            _logger.Log($"Try connecting to socket.io endpoint");
+            _logger.Log($"Try connecting to STT socket endpoint");
 
             _socketSttClient.On("upgrade", (response) =>
             {

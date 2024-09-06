@@ -114,12 +114,18 @@ namespace Virbe.Core
 
         public void InitializeBeing(string baseUrl, string profileID, string profileSecret)
         {
-            StartCoroutine(DownloadConfig(baseUrl, profileID, profileSecret).ToCoroutine());
+            var properUrl = VirbeUtils.TryCreateUrlAddress(_BaseUrl, out var uri);
+            if (!properUrl)
+            {
+                _logger.Log("There is no Base URL or it is wrong, coul not initialize");
+                return;
+            }
+            StartCoroutine(DownloadConfig(uri, profileID, profileSecret).ToCoroutine());
         }
 
-        private async UniTask DownloadConfig(string baseUrl, string profileID, string profileSecret)
+        private async UniTask DownloadConfig(Uri baseUri, string profileID, string profileSecret)
         {
-            var downloader = new BeingConfigDownloader(baseUrl, profileID, profileSecret, _appIdentifer);
+            var downloader = new BeingConfigDownloader(baseUri, profileID, profileSecret, _appIdentifer);
             _beingConfigJson = await downloader.DownloadConfig();
 
             if (_beingConfigJson != null)
