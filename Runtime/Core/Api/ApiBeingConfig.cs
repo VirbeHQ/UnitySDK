@@ -56,6 +56,10 @@ namespace Virbe.Core.Data
             _avatarData = new AvatarData() { AvatarUrl = host.character.mainFile };
         }
 
+        void IApiBeingConfig.Localize(LocalizationData data)
+        {
+        }
+
         [Serializable]
         public class PresenterConfig
         {
