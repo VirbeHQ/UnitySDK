@@ -29,7 +29,13 @@ namespace Virbe.Core.Handlers
         private const string StateChanged = "state";
 
         bool ICommunicationHandler.Initialized => _initialized;
+
         public readonly RequestActionType DefinedActions = RequestActionType.SendAudioStream | RequestActionType.SendText;
+        private readonly LocalizationData _localizationData;
+        private readonly ConnectionType _connectionType;
+        private readonly ActionToken _actionToken;
+        private readonly ConversationData _data;
+        private readonly string _baseUrl;
 
         private bool _initialized;
         private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(ConversationSocketCommunicationHandler));
@@ -39,21 +45,19 @@ namespace Virbe.Core.Handlers
 
         private CancellationTokenSource _endlessSocketTokenSource;
         private CancellationTokenSource _audioSocketSenderTokenSource;
-        private ConversationData _data;
-        private string _baseUrl;
-        private ActionToken _actionToken;
         private VirbeUserSession _currentSession;
-        private ConnectionType _connectionType;
         private Action _additionalDisposeAction;
         private Action<Dictionary<string, string>> _updateHeader;
         private ConcurrentQueue<SpeechChunk> _speechChunks = new ConcurrentQueue<SpeechChunk>();
 
-        internal ConversationSocketCommunicationHandler(string baseUrl, ConversationData data, ActionToken actionToken, ConnectionType connectionType)
+
+        internal ConversationSocketCommunicationHandler(string baseUrl, ConversationData data, ActionToken actionToken, ConnectionType connectionType, LocalizationData localizationData)
         {
             _baseUrl = baseUrl;
             _data = data;
             _actionToken = actionToken;
             _connectionType = connectionType;
+            _localizationData = localizationData;
         }
 
         bool ICommunicationHandler.HasCapability(RequestActionType type)
@@ -241,13 +245,12 @@ namespace Virbe.Core.Handlers
         private async Task InitializeConversation()
         {
             _logger.Log($"Initializing conversation.");
-            var conversationId = _currentSession.ConversationId ?? Guid.Empty.ToString();
             if (string.IsNullOrEmpty(_currentSession.UserId))
             {
                 _logger.LogError($"{nameof(_currentSession.UserId)} must be UUID.");
                 return;
             }
-            var msg = new InitializeMessage() { endUserId = _currentSession.UserId };
+            var msg = new InitializeMessage() { endUserId = _currentSession.UserId, localizationData = _localizationData };
             if (!string.IsNullOrEmpty(_currentSession.ConversationId))
             {
                 msg.conversationId = _currentSession.ConversationId;
@@ -422,6 +425,7 @@ namespace Virbe.Core.Handlers
             public string profileAccessSecret { get; set; }
             public string endUserId { get; set; }
             public string conversationId { get; set; }
+            public LocalizationData localizationData { get; set; }
 
             public override string ToString()
             {
@@ -450,6 +454,6 @@ namespace Virbe.Core.Handlers
         {
             public Conversation conversation { get; set; }
             public List<ConversationMessage> messages { get; set; }
-}
+        }
     }
 }
