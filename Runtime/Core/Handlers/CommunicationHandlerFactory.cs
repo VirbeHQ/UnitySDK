@@ -21,7 +21,7 @@ namespace Virbe.Core.Handlers
 
         public event Action<string> UserSpeechRecognized;
 
-        public bool Initialized { get; private set; }   
+        internal bool Initialized { get; private set; }   
 
         private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(CommunicationSystem));
 
@@ -31,7 +31,7 @@ namespace Virbe.Core.Handlers
         private VirbeBeing _being;
         private ActionToken _callActionToken;
 
-        internal CommunicationSystem(VirbeBeing being, string hostUrl, string profileId, string profileSecret, string appIdentifier)
+        internal CommunicationSystem(VirbeBeing being, string hostUrl, string profileId, string profileSecret, string appIdentifier, LocalizationData localizationData = null)
         {
             var connectionType = ConnectionType.OnDemand;
             _apiBeingConfig = being.ApiBeingConfig;
@@ -73,7 +73,7 @@ namespace Virbe.Core.Handlers
                 }
                 else if(handler.ConnectionProtocol == ConnectionProtocol.socket_io)
                 {
-                    var conversationHandler = new ConversationSocketCommunicationHandler(hostUrl, handler, _callActionToken, connectionType);
+                    var conversationHandler = new ConversationSocketCommunicationHandler(hostUrl, handler, _callActionToken, connectionType, localizationData?.IsValid == true ? localizationData : null);
                     conversationHandler.SetHeaderUpdate(endpointCoder.UpdateHeaders);
                     conversationHandler.RequestTTSProcessing += (args) => ProcessTTS(args).Forget();
                     _handlers.Add(conversationHandler);

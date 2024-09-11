@@ -42,10 +42,12 @@ namespace Virbe.Core
         internal event Action UserStopSpeaking;
         internal event Action UserLeftConversation;
 
-        [Tooltip("E.g. \"Your API Config (check out Hub to get one or generate your Open Source)\"")]
         [SerializeField] private string _BaseUrl;
         [SerializeField] private string _ProfileID;
         [SerializeField] private string _ProfileSecret;
+        [SerializeField] private bool _AutoInitialize = true;
+
+        [SerializeField] private LocalizationData _LocalizationData;
 
         [SerializeField] protected internal bool autoStartConversation = false;
         [SerializeField] private float focusedStateTimeout = 60f;
@@ -82,7 +84,7 @@ namespace Virbe.Core
         private Coroutine _autoBeingStateChangeCoroutine;
         private bool _saveWaveSamplesDebug = false;
         private bool _initialized;
-
+        private LocalizationData _localizationData;
         private string _appIdentifer;
 
         private void Awake()
@@ -90,7 +92,10 @@ namespace Virbe.Core
             _appIdentifer = Application.identifier;
             _virbeActionPlayer = GetComponent<VirbeActionPlayer>();
             _initialized = false;
-            InitializeBeing(_BaseUrl, _ProfileID, _ProfileSecret);
+            if (_AutoInitialize)
+            {
+                InitializeBeing(_BaseUrl, _ProfileID, _ProfileSecret);
+            }
         }
 
         private void Start()
@@ -112,6 +117,8 @@ namespace Virbe.Core
             this.listeningStateTimeout = listeningTimeout;
         }
 
+        public void InitializeBeing() => InitializeBeing(_BaseUrl, _ProfileID, _ProfileSecret);
+
         public void InitializeBeing(string baseUrl, string profileID, string profileSecret)
         {
             var properUrl = VirbeUtils.TryCreateUrlAddress(_BaseUrl, out var uri);
@@ -123,44 +130,13 @@ namespace Virbe.Core
             StartCoroutine(DownloadConfig(uri, profileID, profileSecret).ToCoroutine());
         }
 
-        private async UniTask DownloadConfig(Uri baseUri, string profileID, string profileSecret)
+        /// <summary>
+        /// Should be called before InitializeBeing
+        /// </summary>
+        /// <param name="data"></param>
+        public void SetLocalizationData(LocalizationData data) 
         {
-            var downloader = new BeingConfigDownloader(baseUri, profileID, profileSecret, _appIdentifer);
-            _beingConfigJson = await downloader.DownloadConfig();
-
-            if (_beingConfigJson != null)
-            {
-                _initialized = InitializeBeing(_beingConfigJson);
-
-                if (_initialized && autoStartConversation)
-                {
-                    StartNewConversation().Forget();
-                }
-            }
-        }
-
-        private bool InitializeBeing(string configJson)
-        {
-            if (string.IsNullOrEmpty(configJson))
-            {
-                return false;
-            }
-            ApiBeingConfig = VirbeUtils.ParseConfig(configJson);
-            if(ApiBeingConfig == null)
-            {
-                return false;
-            }
-            _communicationSystem = new CommunicationSystem(this, _BaseUrl, _ProfileID, _ProfileSecret, _appIdentifer);
-            _communicationSystem.UserActionExecuted += CallUserAction;
-            _communicationSystem.BeingActionExecuted += (args) => _virbeActionPlayer.ScheduleNewAction(args);
-            _communicationSystem.UserSpeechRecognized += CallUserSpeechRecognized;
-            _communicationSystem.UiActionExecuted += CallUiAction;
-            _communicationSystem.CustomActionExecuted += CallCustomAction;
-            _communicationSystem.BehaviourActionExecuted += CallbehaviourAction;
-            _communicationSystem.EngineEventExecuted += CallEngineEvent;
-            _communicationSystem.SignalExecuted += CallSignal;
-            _communicationSystem.NamedActionExecuted += CallNamedAction;
-            return true;
+            ApiBeingConfig?.Localize(data);
         }
 
         public void StartNewConversationWithUserSession(string endUserId, string roomId) => RestoreConversation(endUserId, roomId).Forget();
@@ -336,6 +312,50 @@ namespace Virbe.Core
         public void StopCurrentAndScheduledActions()
         {
             _virbeActionPlayer.StopCurrentAndScheduledActions();
+        }
+
+        private async UniTask DownloadConfig(Uri baseUri, string profileID, string profileSecret)
+        {
+            var downloader = new BeingConfigDownloader(baseUri, profileID, profileSecret, _appIdentifer);
+            _beingConfigJson = await downloader.DownloadConfig();
+
+            if (_beingConfigJson != null)
+            {
+                _initialized = InitializeBeing(_beingConfigJson);
+
+                if (_initialized && autoStartConversation)
+                {
+                    StartNewConversation().Forget();
+                }
+            }
+        }
+
+        private bool InitializeBeing(string configJson)
+        {
+            if (string.IsNullOrEmpty(configJson))
+            {
+                return false;
+            }
+            ApiBeingConfig = VirbeUtils.ParseConfig(configJson);
+            if (_localizationData?.IsValid == true)
+            {
+                ApiBeingConfig.Localize(_localizationData);
+            }
+            if (ApiBeingConfig == null)
+            {
+                return false;
+            }
+            _communicationSystem = new CommunicationSystem(this, _BaseUrl, _ProfileID, _ProfileSecret, _appIdentifer, _localizationData);
+            _communicationSystem.UserActionExecuted += CallUserAction;
+            _communicationSystem.BeingActionExecuted += (args) => _virbeActionPlayer.ScheduleNewAction(args);
+            _communicationSystem.UserSpeechRecognized += CallUserSpeechRecognized;
+            _communicationSystem.UiActionExecuted += CallUiAction;
+            _communicationSystem.CustomActionExecuted += CallCustomAction;
+            _communicationSystem.BehaviourActionExecuted += CallbehaviourAction;
+            _communicationSystem.EngineEventExecuted += CallEngineEvent;
+            _communicationSystem.SignalExecuted += CallSignal;
+            _communicationSystem.NamedActionExecuted += CallNamedAction;
+            return true;
         }
 
         private async UniTask RestoreConversation(string endUserId, string roomId)
