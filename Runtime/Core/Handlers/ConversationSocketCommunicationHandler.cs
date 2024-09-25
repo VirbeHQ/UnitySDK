@@ -369,6 +369,7 @@ namespace Virbe.Core.Handlers
                         marks = result.VoiceData?.Marks,
                         cards = cards,
                         buttons = buttons,
+                        audioParameters = result.VoiceData?.AudioParameters,
                     };
                     _actionToken.BeingActionExecuted?.Invoke(action);
                 }

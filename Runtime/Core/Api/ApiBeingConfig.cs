@@ -51,7 +51,7 @@ namespace Virbe.Core.Data
 
             if (ttsConfig != null)
             {
-                _ttsData = new TTSData(ConnectionProtocol.http, ttsConfig.audioChannels, ttsConfig.audioFrequency, ttsConfig.audioSampleBits, string.Empty);
+                _ttsData = new TTSData(ConnectionProtocol.http, string.Empty, ttsConfig.audioChannels, ttsConfig.audioFrequency, ttsConfig.audioSampleBits);
             }
             _avatarData = new AvatarData() { AvatarUrl = host.character.mainFile };
         }

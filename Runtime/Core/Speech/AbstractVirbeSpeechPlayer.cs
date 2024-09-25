@@ -98,6 +98,10 @@ namespace Virbe.Core.Speech
 
         public void Play(List<Mark> marks)
         {
+            if(marks == null || marks.Count == 0)
+            {
+                return;
+            }
             for (int i = 0; i < visemeMappingDict.Length; i++)
             {
                 mixerPlayable.SetInputWeight(i, 0);

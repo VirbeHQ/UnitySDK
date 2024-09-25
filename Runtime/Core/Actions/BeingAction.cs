@@ -19,15 +19,16 @@ namespace Virbe.Core.Actions
         public List<Card> cards;
 
         public Custom custom;
+        public AudioParameters audioParameters;
 
         public bool HasAudio()
         {
             return speech != null;
         }
 
-        public float GetAudioLength(TTSData data)
+        public float GetAudioLength()
         {
-            return speech?.Length > 0 ? ((float)speech.Length) / data.AudioChannels / (data.AudioSampleBits / 8f) /data.AudioFrequency: 0;
+            return speech?.Length > 0 ? ((float)speech.Length) / audioParameters.Channels / (audioParameters.SampleBits / 8f) / audioParameters.Frequency : 0;
         }
 
         [Serializable]

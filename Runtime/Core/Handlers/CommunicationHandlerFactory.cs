@@ -58,7 +58,7 @@ namespace Virbe.Core.Handlers
                 if(_apiBeingConfig.ConversationEngine == EngineType.Room && handler is RoomData)
                 {
                     var roomData = handler as RoomData;
-                    var roomHandler = new RoomCommunicationHandler(roomData, _callActionToken, 500);
+                    var roomHandler = new RoomCommunicationHandler(roomData, _callActionToken, _apiBeingConfig.FallbackTTSData, 500);
                     _being.ConversationStarted += roomHandler.StartCommunication;
                     _being.ConversationEnded += roomHandler.EndCommunication;
                     roomHandler.SetAdditionalDisposeAction(() =>
