@@ -30,12 +30,14 @@ namespace Virbe.Core.Handlers
         private ActionToken _callActionToken;
         private RoomData _roomData;
         private Action _additionalDisposeAction;
+        private TTSData _ttsData;
 
-        internal RoomCommunicationHandler(RoomData data, ActionToken actionToken,int interval = 500)
+        internal RoomCommunicationHandler(RoomData data, ActionToken actionToken, TTSData ttsData, int interval = 500)
         {
             _poolingInterval = interval;
             _roomData = data;
             _callActionToken = actionToken;
+            _ttsData = ttsData;
         }
 
         bool ICommunicationHandler.HasCapability(RequestActionType type) => HasCapability(type);
@@ -224,6 +226,7 @@ namespace Virbe.Core.Handlers
                 marks = marks,
                 cards = message?.action?.uiAction?.value?.cards,
                 buttons = message?.action?.uiAction?.value?.buttons,
+                audioParameters = new AudioParameters() { Channels = _ttsData.AudioChannels, Frequency = _ttsData .AudioFrequency, SampleBits = _ttsData.AudioSampleBits },
             };
             _callActionToken.BeingActionExecuted?.Invoke(action);
         }

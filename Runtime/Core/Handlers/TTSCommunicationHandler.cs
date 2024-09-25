@@ -29,7 +29,8 @@ namespace Virbe.Core.Handlers
             _logger = logger;
             _data = data;
             _endpoint = new Uri(baseUrl);
-            _headers.Add("Virbe-Location-Id", locationId);
+            //_headers.Add("origin", baseUrl);
+            //_headers.Add("referer", baseUrl);
         }
 
         internal void SetHeaderUpdate(Action<Dictionary<string, string>> updateHeaderAction)
@@ -58,6 +59,7 @@ namespace Virbe.Core.Handlers
                     {
                         Marks = resultData.marks,
                         Data = resultData.speech,
+                        AudioParameters = resultData.audioParameters
                     };
                     var action = args[1] as Action<VoiceData>;
                     _logger.Log($"TTS processed : \"{textToProcess}\"  and propagated response.");
@@ -76,9 +78,9 @@ namespace Virbe.Core.Handlers
             return Task.CompletedTask;
         }
 
-        private async Task<TTSResponseModel> ProcessText(string text, string language = null, string voice = null)
+        private async Task<TTSResponseModel> ProcessText(string text, string language = null)
         {
-            var msg = new RequestMessage() {text = text, language = language, voice = voice };
+            var msg = new RequestMessage() {text = text, language = language, personaId = null};
             var json = JsonConvert.SerializeObject(msg);
             _updateHeader?.Invoke(_headers);
             Uri requestUri = new Uri(_endpoint, _data.Path);
@@ -137,13 +139,15 @@ namespace Virbe.Core.Handlers
         private class RequestMessage
         {
             public string text { get; set; }
-            public string voice { get; set; }
             public string language { get; set; }
+            public string personaId { get; set; }
         }
         private class TTSResponseModel
         {
             public List<Mark> marks;
             public byte[] speech;
+            public string text;
+            public AudioParameters audioParameters;
         }
     }
 }
