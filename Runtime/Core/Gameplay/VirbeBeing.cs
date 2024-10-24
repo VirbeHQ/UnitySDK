@@ -42,7 +42,8 @@ namespace Virbe.Core
         internal event Action UserStopSpeaking;
         internal event Action UserLeftConversation;
 
-        [SerializeField] private string _BaseUrl;
+        private string _baseUrl;
+        [SerializeField] private string _ApiUrl;
         [SerializeField] private string _ProfileID;
         [SerializeField] private string _ProfileSecret;
         [SerializeField] private bool _AutoInitialize = true;
@@ -94,7 +95,7 @@ namespace Virbe.Core
             _initialized = false;
             if (_AutoInitialize)
             {
-                InitializeBeing(_BaseUrl, _ProfileID, _ProfileSecret);
+                InitializeBeing(_ApiUrl, _ProfileID, _ProfileSecret);
             }
         }
 
@@ -117,16 +118,17 @@ namespace Virbe.Core
             this.listeningStateTimeout = listeningTimeout;
         }
 
-        public void InitializeBeing() => InitializeBeing(_BaseUrl, _ProfileID, _ProfileSecret);
+        public void InitializeBeing() => InitializeBeing(_ApiUrl, _ProfileID, _ProfileSecret);
 
-        public void InitializeBeing(string baseUrl, string profileID, string profileSecret)
+        public void InitializeBeing(string apiUrl, string profileID, string profileSecret)
         {
-            var properUrl = VirbeUtils.TryCreateUrlAddress(_BaseUrl, out var uri);
+            var properUrl = VirbeUtils.TryCreateUrlAddress(apiUrl, out var uri);
             if (!properUrl)
             {
                 _logger.Log("There is no Base URL or it is wrong, coul not initialize");
                 return;
             }
+            _baseUrl = uri.GetLeftPart(UriPartial.Authority);
             StartCoroutine(DownloadConfig(uri, profileID, profileSecret).ToCoroutine());
         }
 
@@ -314,9 +316,9 @@ namespace Virbe.Core
             _virbeActionPlayer.StopCurrentAndScheduledActions();
         }
 
-        private async UniTask DownloadConfig(Uri baseUri, string profileID, string profileSecret)
+        private async UniTask DownloadConfig(Uri settingsUri, string profileID, string profileSecret)
         {
-            var downloader = new BeingConfigDownloader(baseUri, profileID, profileSecret, _appIdentifer);
+            var downloader = new BeingConfigDownloader(settingsUri, profileID, profileSecret, _appIdentifer);
             _beingConfigJson = await downloader.DownloadConfig();
 
             if (_beingConfigJson != null)
@@ -345,7 +347,7 @@ namespace Virbe.Core
             {
                 return false;
             }
-            _communicationSystem = new CommunicationSystem(this, _BaseUrl, _ProfileID, _ProfileSecret, _appIdentifer, _localizationData);
+            _communicationSystem = new CommunicationSystem(this, _baseUrl, _ProfileID, _ProfileSecret, _appIdentifer, _localizationData);
             _communicationSystem.UserActionExecuted += CallUserAction;
             _communicationSystem.BeingActionExecuted += (args) => _virbeActionPlayer.ScheduleNewAction(args);
             _communicationSystem.UserSpeechRecognized += CallUserSpeechRecognized;
