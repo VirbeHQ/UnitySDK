@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
 using Newtonsoft.Json;
+using UnityEngine;
 using Virbe.Core.Actions;
 using Virbe.Core.Custom;
 using Virbe.Core.Data;
@@ -193,18 +194,7 @@ namespace Virbe.Core.Handlers
                 var state = JsonConvert.DeserializeObject<List<StateMessage>>(responseMessage);
             });
 
-            _socketClient.On(ConversationInitialize, (response) => 
-            {
-                _logger.Log($"[{DateTime.Now}]Conversation initialized");
-
-                if (_connectionType == ConnectionType.Continous)
-                {
-                    StartSpeech().Forget();
-                }
-                var responseMessage = response.ToString();
-                var conversation = JsonConvert.DeserializeObject<ConversationStartResponse>(responseMessage);
-                _currentSession.UpdateSession(_currentSession.UserId, conversation.conversation.Id);
-            });
+            _socketClient.On(ConversationInitialize, (response) => OnConversationInitialize(response.ToString()));
 
             _socketClient.OnConnected += (sender, args) => OnConnected().Forget();
 
@@ -220,6 +210,30 @@ namespace Virbe.Core.Handlers
 
             _logger.Log($"Try connecting to conversation socket endpoint: {_baseUrl}{_data.Path}");
             return _socketClient.ConnectAsync(_endlessSocketTokenSource.Token);
+        }
+
+        private void OnConversationInitialize(string responseJson)
+        {
+            _logger.Log($"[{DateTime.Now}]Conversation initialized");
+
+            if (_connectionType == ConnectionType.Continous)
+            {
+                StartSpeech().Forget();
+            }
+            try
+            {
+                var conversation = JsonConvert.DeserializeObject<List<ConversationStartResponse>>(responseJson);
+                if(conversation.Count == 0)
+                {
+                    Debug.LogError("Conversation init message is empty");
+                    return;
+                }
+                _currentSession.UpdateSession(_currentSession.UserId, conversation[0].conversation.Id);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError("Could not parse conversation init message: " + ex);
+            }
         }
 
         private async UniTaskVoid OnConnected()
@@ -244,13 +258,16 @@ namespace Virbe.Core.Handlers
 
         private async Task InitializeConversation()
         {
+            //TODO: save convID on reconnect
+            //TODO: persistent enduserID option
+
             _logger.Log($"Initializing conversation.");
             if (string.IsNullOrEmpty(_currentSession.UserId))
             {
                 _logger.LogError($"{nameof(_currentSession.UserId)} must be UUID.");
                 return;
             }
-            var msg = new InitializeMessage() { endUserId = _currentSession.UserId, localizationData = _localizationData };
+            var msg = new InitializeMessage() { endUserId = _currentSession.UserId};
             if (!string.IsNullOrEmpty(_currentSession.ConversationId))
             {
                 msg.conversationId = _currentSession.ConversationId;
@@ -259,7 +276,6 @@ namespace Virbe.Core.Handlers
             _updateHeader?.Invoke(dict);
             msg.profileId = dict["x-virbe-access-key"];
             msg.profileAccessSecret = dict["x-virbe-access-secret"];
-
             await _socketClient.EmitAsync(ConversationInitialize, msg);
         }
 
@@ -271,7 +287,21 @@ namespace Virbe.Core.Handlers
 
         private void HandleConversationMessage(string responseJson)
         {
-            var messages = JsonConvert.DeserializeObject<List<ConversationMessage>>(responseJson);
+            List<ConversationMessage> messages = new List<ConversationMessage>();
+            try
+            {
+                messages = JsonConvert.DeserializeObject<List<ConversationMessage>>(responseJson);
+                if (messages.Count == 0)
+                {
+                    Debug.Log("Messages list empty but get conversation message");
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError("Could not parse conversation message: " + ex);
+            }
+
             var message = messages.FirstOrDefault();
             var messageText = message?.Action?.Text?.Text;
 
@@ -425,12 +455,14 @@ namespace Virbe.Core.Handlers
             public string profileId { get; set; }
             public string profileAccessSecret { get; set; }
             public string endUserId { get; set; }
+            [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
             public string conversationId { get; set; }
-            public LocalizationData localizationData { get; set; }
+            [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+            public DateTime messageSince { get; set; }
 
             public override string ToString()
             {
-                return $"endUserId = {endUserId}, conversationId = {conversationId}";
+                return $"endUserId = {endUserId},";
             }
         }
 

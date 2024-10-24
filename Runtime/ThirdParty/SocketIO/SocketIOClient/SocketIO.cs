@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
+using Newtonsoft.Json;
 using SocketIO.Core;
 using SocketIO.Serializer.Core;
 using SocketIO.Serializer.NewtonsoftJson;
