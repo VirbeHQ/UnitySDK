@@ -29,8 +29,6 @@ namespace Virbe.Core.Handlers
             _logger = logger;
             _data = data;
             _endpoint = new Uri(baseUrl);
-            //_headers.Add("origin", baseUrl);
-            //_headers.Add("referer", baseUrl);
         }
 
         internal void SetHeaderUpdate(Action<Dictionary<string, string>> updateHeaderAction)

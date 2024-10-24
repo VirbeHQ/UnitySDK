@@ -50,7 +50,7 @@ namespace Virbe.Core.Handlers
         private Action _additionalDisposeAction;
         private Action<Dictionary<string, string>> _updateHeader;
         private ConcurrentQueue<SpeechChunk> _speechChunks = new ConcurrentQueue<SpeechChunk>();
-
+        private DateTime _lastMessageTime;
 
         internal ConversationSocketCommunicationHandler(string baseUrl, ConversationData data, ActionToken actionToken, ConnectionType connectionType, LocalizationData localizationData)
         {
@@ -169,6 +169,8 @@ namespace Virbe.Core.Handlers
             _socketClient.Options.EIO = SocketIO.Core.EngineIO.V4;
             _socketClient.Options.Path = _data.Path;
             _socketClient.Options.Transport = SocketIOClient.Transport.TransportProtocol.WebSocket;
+            _socketClient.Options.Reconnection = true;
+            _socketClient.Options.ReconnectionDelay = 2000f;
             _currentSttResult.Clear();
 
             _socketClient.On(ConversationMessage, (response) => HandleConversationMessage(response.ToString()));
@@ -202,24 +204,35 @@ namespace Virbe.Core.Handlers
             {
                 _endlessSocketTokenSource?.Cancel();
                 _logger.Log($"Disconnected from the conversation socket {args}");
+                _actionToken.ConversationDisconnected?.Invoke();
             };
 
             _socketClient.OnError += (sender, args) => _logger.Log($"Socket error: {args}");
 
+            _socketClient.OnReconnectAttempt += OnReconnectingHandler;
+            _socketClient.OnReconnected += (sender, args) => OnReconnectedHandler(args).Forget();
             _socketClient.On(ConversationError, (response) => _logger.Log($"[{DateTime.Now}]Conversation error occured : {response}"));
 
             _logger.Log($"Try connecting to conversation socket endpoint: {_baseUrl}{_data.Path}");
             return _socketClient.ConnectAsync(_endlessSocketTokenSource.Token);
         }
 
+        private async UniTaskVoid OnReconnectedHandler(int e)
+        {
+            _actionToken.ConversationConnected?.Invoke();
+            await InitializeConversation(_currentSession.ConversationId);
+        }
+
+        private void OnReconnectingHandler(object sender, int attemptCount)
+        {
+            _logger.Log($"Reconnecting, attempt: {attemptCount}");
+            _actionToken.ConversationReconnecting?.Invoke();
+        }
+
         private void OnConversationInitialize(string responseJson)
         {
-            _logger.Log($"[{DateTime.Now}]Conversation initialized");
+            List<ConversationMessage> messages = new List<ConversationMessage>();
 
-            if (_connectionType == ConnectionType.Continous)
-            {
-                StartSpeech().Forget();
-            }
             try
             {
                 var conversation = JsonConvert.DeserializeObject<List<ConversationStartResponse>>(responseJson);
@@ -229,17 +242,33 @@ namespace Virbe.Core.Handlers
                     return;
                 }
                 _currentSession.UpdateSession(_currentSession.UserId, conversation[0].conversation.Id);
+                _logger.Log($"[{DateTime.Now}]Conversation initialized with ID : {_currentSession.ConversationId} for user : {_currentSession.UserId}");
+                messages = conversation[0].messages;
             }
             catch (Exception ex)
             {
                 Debug.LogError("Could not parse conversation init message: " + ex);
+            }
+
+            if (_connectionType == ConnectionType.Continous)
+            {
+                StartSpeech().Forget();
+            }
+
+            foreach (var message in messages)
+            {
+                if (message.ParticipantType == "Api" || message.ParticipantType == "User")
+                {
+                    ProcessMessage(message);
+                }
             }
         }
 
         private async UniTaskVoid OnConnected()
         {
             _logger.Log($"Connected to the socket.");
-            await InitializeConversation();
+            _actionToken.ConversationConnected?.Invoke();
+            await InitializeConversation(_currentSession.ConversationId);
         }
 
         private async UniTaskVoid StartSpeech()
@@ -256,11 +285,8 @@ namespace Virbe.Core.Handlers
             await _socketClient.EmitAsync(SpeechEnd);
         }
 
-        private async Task InitializeConversation()
+        private async Task InitializeConversation(string conversationID = null)
         {
-            //TODO: save convID on reconnect
-            //TODO: persistent enduserID option
-
             _logger.Log($"Initializing conversation.");
             if (string.IsNullOrEmpty(_currentSession.UserId))
             {
@@ -268,9 +294,10 @@ namespace Virbe.Core.Handlers
                 return;
             }
             var msg = new InitializeMessage() { endUserId = _currentSession.UserId};
-            if (!string.IsNullOrEmpty(_currentSession.ConversationId))
+            if (!string.IsNullOrEmpty(conversationID))
             {
-                msg.conversationId = _currentSession.ConversationId;
+                msg.conversationId = conversationID;
+                msg.messageSince = _lastMessageTime;
             }
             var dict = new Dictionary<string, string>();
             _updateHeader?.Invoke(dict);
@@ -301,8 +328,12 @@ namespace Virbe.Core.Handlers
             {
                 Debug.LogError("Could not parse conversation message: " + ex);
             }
+            _lastMessageTime = DateTime.UtcNow;
+            ProcessMessage(messages.FirstOrDefault());
+        }
 
-            var message = messages.FirstOrDefault();
+        private void ProcessMessage(ConversationMessage message)
+        {
             var messageText = message?.Action?.Text?.Text;
 
             if (!string.IsNullOrEmpty(messageText))
@@ -313,21 +344,25 @@ namespace Virbe.Core.Handlers
             if (message.ParticipantType == "EndUser")
             {
                 _actionToken.UserActionExecuted?.Invoke(new UserAction(messageText));
-                return;
             }
-
-            if (message.ParticipantType == "Api" || message.ParticipantType == "User")
+            else if (message.ParticipantType == "Api" || message.ParticipantType == "User")
             {
-                CallEventsForNonEmptyActions(message);
+                HandleApiMessage(message);
+            }
+        }
 
-                if (!string.IsNullOrEmpty(messageText))
-                {
-                    var guid = Guid.NewGuid();
+        private void HandleApiMessage(ConversationMessage message)
+        {
+            var messageText = message?.Action?.Text?.Text;
+            CallEventsForNonEmptyActions(message);
 
-                    var ttsProcessingArgs = new TTSProcessingArgs(messageText, guid, message?.Action?.Text?.Language, null, (data) => ProcessResponse(guid, data));
-                    _speechChunks.Enqueue(new SpeechChunk(ttsProcessingArgs, message));
-                    RequestTTSProcessing?.Invoke(ttsProcessingArgs);
-                }
+            if (!string.IsNullOrEmpty(messageText))
+            {
+                var guid = Guid.NewGuid();
+
+                var ttsProcessingArgs = new TTSProcessingArgs(messageText, guid, message?.Action?.Text?.Language, null, (data) => ProcessResponse(guid, data));
+                _speechChunks.Enqueue(new SpeechChunk(ttsProcessingArgs, message));
+                RequestTTSProcessing?.Invoke(ttsProcessingArgs);
             }
         }
 
@@ -410,11 +445,11 @@ namespace Virbe.Core.Handlers
         {
             _endlessSocketTokenSource?.Cancel();
             var tempSocketHandle = _socketClient;
-            await _socketClient.EmitAsync(SpeechEnd);
+            await tempSocketHandle.EmitAsync(SpeechEnd);
             await Task.Delay(250);
-            await tempSocketHandle.DisconnectAsync();
-            tempSocketHandle.Dispose();
-            tempSocketHandle = null;
+            await _socketClient.DisconnectAsync();
+            _socketClient.Dispose();
+            _socketClient = null;
         }
 
         void IDisposable.Dispose()

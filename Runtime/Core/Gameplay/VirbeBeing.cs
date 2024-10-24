@@ -34,6 +34,7 @@ namespace Virbe.Core
         public Behaviour CurrentBeingBehaviour => _currentState._behaviour;
         public bool IsBeingSpeaking => _virbeActionPlayer.HasActionsToPlay;
         public IApiBeingConfig ApiBeingConfig { get; private set; }
+        public Guid UserId { get; private set; }
 
         internal event Action ConversationStarted;
         internal event Action ConversationEnded;
@@ -47,6 +48,7 @@ namespace Virbe.Core
         [SerializeField] private string _ProfileID;
         [SerializeField] private string _ProfileSecret;
         [SerializeField] private bool _AutoInitialize = true;
+        [SerializeField] private bool _PersistentUserID;
 
         [SerializeField] private LocalizationData _LocalizationData;
 
@@ -87,12 +89,30 @@ namespace Virbe.Core
         private bool _initialized;
         private LocalizationData _localizationData;
         private string _appIdentifer;
+        private const string _userIdKey = "endUserIdKey";
 
         private void Awake()
         {
             _appIdentifer = Application.identifier;
             _virbeActionPlayer = GetComponent<VirbeActionPlayer>();
             _initialized = false;
+            UserId = Guid.NewGuid();
+            if (_PersistentUserID)
+            {
+                if (PlayerPrefs.HasKey(_userIdKey))
+                {
+                    var id = PlayerPrefs.GetString(_userIdKey);
+                    UserId = Guid.Parse(id);
+                }
+                else
+                {
+                    PlayerPrefs.SetString(_userIdKey, UserId.ToString());
+                }
+            }
+            else
+            {
+                PlayerPrefs.DeleteKey(_userIdKey);
+            }
             if (_AutoInitialize)
             {
                 InitializeBeing(_ApiUrl, _ProfileID, _ProfileSecret);
@@ -110,8 +130,9 @@ namespace Virbe.Core
             StopAllCoroutines();
         }
 
-        public void SetSettings(bool autoStartConversation = true, float focusedStateTimeout = 60, float inConversationTimeout = 30, float listeningTimeout = 10)
+        public void SetSettings(bool autoStartConversation = true, bool persistentUserId = false, float focusedStateTimeout = 60, float inConversationTimeout = 30, float listeningTimeout = 10)
         {
+            this._PersistentUserID = persistentUserId;
             this.autoStartConversation = autoStartConversation;
             this.focusedStateTimeout = focusedStateTimeout;
             this.inConversationStateTimeout = inConversationTimeout;
@@ -141,9 +162,9 @@ namespace Virbe.Core
             ApiBeingConfig?.Localize(data);
         }
 
-        public void StartNewConversationWithUserSession(string endUserId, string roomId) => RestoreConversation(endUserId, roomId).Forget();
+        public void StartNewConversationWithUserSession(Guid endUserId, string roomId) => RestoreConversation(endUserId, roomId).Forget();
 
-        public async UniTask StartNewConversation(bool forceNewEndUser = false, string endUserId = null)
+        public async UniTask StartNewConversation(bool forceNewConversation = false, Guid? endUserId = null)
         {
             if(!_initialized)
             {
@@ -151,10 +172,10 @@ namespace Virbe.Core
                 return;
             }
 
-            if (!_communicationSystem.Initialized || forceNewEndUser)
+            if (!_communicationSystem.Initialized || forceNewConversation)
             {
                 _virbeActionPlayer.StopCurrentAndScheduledActions();
-                await _communicationSystem.InitializeWith(endUserId);
+                await _communicationSystem.InitializeWith(endUserId ?? Guid.NewGuid());
                 SendNamedAction("conversation_start");
             }
             ConversationStarted?.Invoke();
@@ -166,7 +187,7 @@ namespace Virbe.Core
             ConversationEnded?.Invoke();
         }
 
-        public void UserHasApproached(bool createNewEndUser = false)
+        public void UserHasApproached(bool forceNewConversation = false)
         {
             if (!_initialized)
             {
@@ -175,9 +196,9 @@ namespace Virbe.Core
             }
             if (CanChangeBeingState(Behaviour.Focused))
             {
-                if (createNewEndUser && _currentState._behaviour == Behaviour.Idle)
+                if (forceNewConversation && _currentState._behaviour == Behaviour.Idle)
                 {
-                    StartNewConversation(createNewEndUser).Forget();
+                    StartNewConversation(true).Forget();
                 }
 
                 ChangeBeingState(Behaviour.Focused);
@@ -327,7 +348,7 @@ namespace Virbe.Core
 
                 if (_initialized && autoStartConversation)
                 {
-                    StartNewConversation().Forget();
+                    StartNewConversation(true, UserId).Forget();
                 }
             }
         }
@@ -360,7 +381,7 @@ namespace Virbe.Core
             return true;
         }
 
-        private async UniTask RestoreConversation(string endUserId, string roomId)
+        private async UniTask RestoreConversation(Guid endUserId, string roomId)
         {
             if (!_initialized)
             {

@@ -21,6 +21,10 @@ namespace Virbe.Core.Handlers
 
         public event Action<string> UserSpeechRecognized;
 
+        public event Action ConversationDisconnected;
+        public event Action ConversationConnected;
+        public event Action ConversationReconnecting;
+
         internal bool Initialized { get; private set; }   
 
         private readonly VirbeEngineLogger _logger = new VirbeEngineLogger(nameof(CommunicationSystem));
@@ -47,6 +51,10 @@ namespace Virbe.Core.Handlers
             _callActionToken.EngineEventExecuted += (args) => EngineEventExecuted?.Invoke(args);
             _callActionToken.SignalExecuted += (args) => SignalExecuted?.Invoke(args);
             _callActionToken.NamedActionExecuted += (args) => NamedActionExecuted?.Invoke(args);
+
+            _callActionToken.ConversationConnected += () => ConversationConnected?.Invoke();
+            _callActionToken.ConversationReconnecting += () => ConversationReconnecting?.Invoke();
+            _callActionToken.ConversationDisconnected += () => ConversationDisconnected?.Invoke();
 
             var endpointCoder = new ApiEndpointCoder(appIdentifier, profileId, profileSecret);
 
@@ -138,7 +146,7 @@ namespace Virbe.Core.Handlers
             }
         }
 
-        internal async UniTask InitializeWith(string endUserId = null, string conversationId= null)
+        internal async UniTask InitializeWith(Guid endUserId, string conversationId= null)
         {
             _session = new VirbeUserSession(endUserId, conversationId);
             foreach (var handler in _handlers)
@@ -227,6 +235,10 @@ namespace Virbe.Core.Handlers
             public Action<EngineEvent> EngineEventExecuted;
             public Action<Signal> SignalExecuted;
             public Action<NamedAction> NamedActionExecuted;
+
+            public Action ConversationDisconnected;
+            public Action ConversationConnected;
+            public Action ConversationReconnecting;
         }
     }
 }
