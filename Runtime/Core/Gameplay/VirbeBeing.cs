@@ -174,7 +174,7 @@ namespace Virbe.Core
 
             if (!_communicationSystem.Initialized || forceNewConversation)
             {
-                _virbeActionPlayer.StopCurrentAndScheduledActions();
+                StopCurrentAndScheduledActions();
                 await _communicationSystem.InitializeWith(endUserId ?? Guid.NewGuid());
                 SendNamedAction("conversation_start");
             }
@@ -335,6 +335,7 @@ namespace Virbe.Core
         public void StopCurrentAndScheduledActions()
         {
             _virbeActionPlayer.StopCurrentAndScheduledActions();
+            _communicationSystem.ClearProcessingQueue();
         }
 
         private async UniTask DownloadConfig(Uri settingsUri, string profileID, string profileSecret)

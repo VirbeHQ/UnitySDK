@@ -3,9 +3,12 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
 using Newtonsoft.Json;
+using SocketIOClient.Extensions;
+using UnityEngine;
 using Virbe.Core.Data;
 using Virbe.Core.Logger;
 
@@ -23,6 +26,7 @@ namespace Virbe.Core.Handlers
         private readonly Uri _endpoint;
         public readonly RequestActionType DefinedActions = RequestActionType.ProcessTTS;
         private bool _initialized;
+        private HashSet<CancellationTokenSource> _activeRequestTokens = new HashSet<CancellationTokenSource>();
 
         internal TTSCommunicationHandler(string baseUrl, TTSData data, string locationId, Virbe.Core.ILogger logger = null)
         {
@@ -52,7 +56,16 @@ namespace Virbe.Core.Handlers
                     var textToProcess = args[0] as string;
                     _logger.Log($"TTS processing : \"{textToProcess}\"");
 
+                    var tokenSource = new CancellationTokenSource();
+                    _activeRequestTokens.Add(tokenSource);
+
                     var resultData = await ProcessText(textToProcess);
+                    if (tokenSource.IsCancellationRequested)
+                    {
+                        Debug.Log("Token canceled drop response");
+                        return;
+                    }
+                    _activeRequestTokens.Remove(tokenSource);
                     var voiceData = new VoiceData()
                     {
                         Marks = resultData.marks,
@@ -82,6 +95,7 @@ namespace Virbe.Core.Handlers
             var json = JsonConvert.SerializeObject(msg);
             _updateHeader?.Invoke(_headers);
             Uri requestUri = new Uri(_endpoint, _data.Path);
+
             return await Request<TTSResponseModel>(requestUri.AbsoluteUri, HttpMethod.Post, _headers, true, json);
         }
 
@@ -132,6 +146,17 @@ namespace Virbe.Core.Handlers
                 }
                 return default(T);
             }
+        }
+
+        Task ICommunicationHandler.ClearProcessingQueue()
+        {
+            foreach(var token in _activeRequestTokens)
+            {
+                Debug.Log("Token canceled");
+                token.TryCancel();
+            }
+            _activeRequestTokens.Clear();
+            return Task.CompletedTask;
         }
 
         private class RequestMessage
