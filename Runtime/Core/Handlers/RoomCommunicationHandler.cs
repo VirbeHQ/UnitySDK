@@ -275,5 +275,10 @@ namespace Virbe.Core.Handlers
         {
             _additionalDisposeAction = value;
         }
+
+        Task ICommunicationHandler.ClearProcessingQueue()
+        {
+            return Task.CompletedTask;
+        }
     }
 }

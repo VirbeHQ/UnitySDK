@@ -197,8 +197,8 @@ namespace Virbe.Core.Handlers
                 _audioSocketSenderTokenSource?.Cancel();
                 await tempSocketHandle.DisconnectAsync();
                 tempSocketHandle.Dispose();
-                tempSocketHandle = null;
             }
+            _socketSttClient = null;
         }
 
         void IDisposable.Dispose()
@@ -208,5 +208,11 @@ namespace Virbe.Core.Handlers
             CloseSocket();
         }
 
+        Task ICommunicationHandler.ClearProcessingQueue()
+        {
+            _speechBytesAwaitingSend.Clear();
+            _currentSttResult.Clear();
+            return Task.CompletedTask;
+        }
     }
 }

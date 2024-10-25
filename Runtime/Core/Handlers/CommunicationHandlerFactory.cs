@@ -210,6 +210,14 @@ namespace Virbe.Core.Handlers
             }
         }
 
+        internal void ClearProcessingQueue()
+        {
+            foreach(var handler in _handlers)
+            {
+                handler.ClearProcessingQueue();
+            }
+        }
+
         public void Dispose()
         {
             foreach(var handler in _handlers)
