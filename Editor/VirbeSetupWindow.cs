@@ -6,9 +6,6 @@ using Unity.SharpZipLib.Zip;
 using UnityEditor.PackageManager.Requests;
 using UnityEditor.PackageManager;
 using System.Collections;
-using System.Reflection;
-using System;
-using System.Security.Policy;
 
 namespace Virbe.Core
 {
@@ -73,6 +70,8 @@ namespace Virbe.Core
         {
             var wnd = GetWindow<VirbeSetupWindow>();
             wnd.titleContent = new GUIContent("Virbe Integration");
+            wnd.minSize = new Vector2(400, 300);
+            wnd.maxSize = new Vector2(500, 400);
         }
 
         public void CreateGUI()
@@ -80,43 +79,53 @@ namespace Virbe.Core
             _rpmInstalled = CheckIfRPMExists();
 
             var root = rootVisualElement;
+            var container = new VisualElement();
+            container.style.flexDirection = FlexDirection.Column;
+            container.style.justifyContent = Justify.Center;
+            container.style.alignItems = Align.Center;
+            container.style.paddingTop = 20;
+            container.style.paddingBottom = 20;
+            container.style.paddingLeft = 20;
+
+            root.Add(container);
+
             Label label = new Label("Select integration to use with Virbe SDK");
             label.style.paddingTop = 16;
             label.style.paddingBottom = 32;
-            root.Add(label);
+            container.Add(label);
 
             RPMToggle = new Toggle();
             RPMToggle.value = Directory.Exists(_RPMFullPath) && Directory.GetFiles(_RPMFullPath).Length > 0;
             RPMToggle.RegisterValueChangedCallback(RPMToggleValueChanged);
             RPMToggle.name = "RPM";
             RPMToggle.label = "RPM";
-            root.Add(RPMToggle);
+            container.Add(RPMToggle);
 
             _rpmDownloadToggle = new Toggle();
             _rpmDownloadToggle.value = false;
             _rpmDownloadToggle.name = "Download RPM";
             _rpmDownloadToggle.label = "Download RPM";
             _rpmDownloadToggle.visible = false;
-            root.Add(_rpmDownloadToggle);
+            container.Add(_rpmDownloadToggle);
 
             cc3Toggle = new Toggle();
             cc3Toggle.value = Directory.Exists(_cc3FullPath) && Directory.GetFiles(_cc3FullPath).Length > 0;
             cc3Toggle.name = "CC3";
             cc3Toggle.label = "CC3";
-            root.Add(cc3Toggle);
+            container.Add(cc3Toggle);
 
             FaceItToggle = new Toggle();
             FaceItToggle.value = Directory.Exists(_FaceItFullPath) && Directory.GetFiles(_FaceItFullPath).Length > 0;
             FaceItToggle.name = "Face It";
             FaceItToggle.label = "Face It";
-            root.Add(FaceItToggle);
+            container.Add(FaceItToggle);
 
             Daz3DToggle = new Toggle();
             Daz3DToggle.value = Directory.Exists(_Daz3DFullPath) && Directory.GetFiles(_Daz3DFullPath).Length > 0;
             Daz3DToggle.name = "Daz3D";
             Daz3DToggle.label = "Daz3D";
             Daz3DToggle.style.paddingBottom = 32;
-            root.Add(Daz3DToggle);
+            container.Add(Daz3DToggle);
 
             Button button = new Button();
             button.name = "Confirm";
@@ -124,7 +133,7 @@ namespace Virbe.Core
             button.style.maxWidth = 128;
             button.style.height = 32;
 
-            root.Add(button);
+            container.Add(button);
             button.clicked += Confirmed;
 
             _logText = new Label();
@@ -132,7 +141,7 @@ namespace Virbe.Core
             _logText.text = string.Empty;
             _logText.style.paddingTop = 32;
             _logText.style.fontSize = 18;
-            root.Add(_logText);
+            container.Add(_logText);
         }
 
         private void RPMToggleValueChanged(ChangeEvent<bool> evt)
